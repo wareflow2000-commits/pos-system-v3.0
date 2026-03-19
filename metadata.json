@@ -1,0 +1,5 @@
+{
+  "name": "POS System v3",
+  "description": "A professional Point of Sale and Inventory Management system with PIN/Password login, Online/Offline modes, and device-specific UI (Desktop/Mobile).",
+  "requestFramePermissions": ["camera"]
+}
