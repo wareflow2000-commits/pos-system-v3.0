@@ -76,6 +76,7 @@ const Settings: React.FC = () => {
     enableCloudSync: false,
     isOnlineMode: false,
     serverUrl: 'http://localhost:3000',
+    deviceRole: 'server',
   });
 
   const [loading, setLoading] = useState(true);
@@ -783,30 +784,6 @@ const Settings: React.FC = () => {
                       <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100 space-y-6">
                         <div className="flex items-center gap-3 mb-4">
                           <div className="p-2 bg-indigo-100 rounded-xl">
-                            <ScanLine className="w-5 h-5 text-indigo-600" />
-                          </div>
-                          <h3 className="font-bold text-gray-800 text-lg">ماسح الباركود</h3>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <label className="text-sm font-bold text-gray-700">نوع الماسح الافتراضي</label>
-                          <select 
-                            value={settings.scannerType}
-                            onChange={(e) => setSettings({ ...settings, scannerType: e.target.value })}
-                            className="w-full px-5 py-3.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                          >
-                            <option value="usb">جهاز مسح USB / Bluetooth (لوحة مفاتيح)</option>
-                            <option value="camera">كاميرا الجهاز (هاتف / ويب كام)</option>
-                          </select>
-                          <p className="text-xs text-gray-500 mt-2">
-                            يحدد هذا الخيار الطريقة الافتراضية للتعرف على الباركود عند إضافة منتجات أو في شاشة البيع.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100 space-y-6">
-                        <div className="flex items-center gap-3 mb-4">
-                          <div className="p-2 bg-indigo-100 rounded-xl">
                             <Printer className="w-5 h-5 text-indigo-600" />
                           </div>
                           <h3 className="font-bold text-gray-800 text-lg">طابعة الفواتير الحرارية</h3>
@@ -909,43 +886,45 @@ const Settings: React.FC = () => {
                     </div>
                     
                     <div className="space-y-8">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <button
-                          onClick={() => setSettings({ ...settings, syncMode: 'local', enableCloudSync: false })}
-                          className={`flex items-center gap-6 p-8 rounded-[40px] border-2 transition-all ${
-                            settings.syncMode === 'local' 
-                              ? 'border-indigo-600 bg-white shadow-xl shadow-indigo-100' 
-                              : 'border-transparent bg-gray-50 grayscale opacity-60'
-                          }`}
-                        >
-                          <div className={`p-5 rounded-2xl ${settings.syncMode === 'local' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-400'}`}>
-                            <Database className="w-8 h-8" />
-                          </div>
-                          <div className="text-right">
-                            <p className="font-black text-gray-900 text-xl">سيرفر محلي</p>
-                            <p className="text-sm text-gray-500">البيانات مخزنة على جهازك الحالي</p>
-                          </div>
-                        </button>
+                      {settings.deviceRole !== 'client' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <button
+                            onClick={() => setSettings({ ...settings, syncMode: 'local', enableCloudSync: false })}
+                            className={`flex items-center gap-6 p-8 rounded-[40px] border-2 transition-all ${
+                              settings.syncMode === 'local' 
+                                ? 'border-indigo-600 bg-white shadow-xl shadow-indigo-100' 
+                                : 'border-transparent bg-gray-50 grayscale opacity-60'
+                            }`}
+                          >
+                            <div className={`p-5 rounded-2xl ${settings.syncMode === 'local' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                              <Database className="w-8 h-8" />
+                            </div>
+                            <div className="text-right">
+                              <p className="font-black text-gray-900 text-xl">سيرفر محلي</p>
+                              <p className="text-sm text-gray-500">البيانات مخزنة على جهازك الحالي</p>
+                            </div>
+                          </button>
 
-                        <button
-                          onClick={() => setSettings({ ...settings, syncMode: 'cloud', enableCloudSync: true })}
-                          className={`flex items-center gap-6 p-8 rounded-[40px] border-2 transition-all ${
-                            settings.syncMode === 'cloud' 
-                              ? 'border-indigo-600 bg-white shadow-xl shadow-indigo-100' 
-                              : 'border-transparent bg-gray-50 grayscale opacity-60'
-                          }`}
-                        >
-                          <div className={`p-5 rounded-2xl ${settings.syncMode === 'cloud' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-400'}`}>
-                            <Cloud className="w-8 h-8" />
-                          </div>
-                          <div className="text-right">
-                            <p className="font-black text-gray-900 text-xl">مزامنة سحابية</p>
-                            <p className="text-sm text-gray-500">نسخ احتياطي ومزامنة عبر الأجهزة</p>
-                          </div>
-                        </button>
-                      </div>
+                          <button
+                            onClick={() => setSettings({ ...settings, syncMode: 'cloud', enableCloudSync: true })}
+                            className={`flex items-center gap-6 p-8 rounded-[40px] border-2 transition-all ${
+                              settings.syncMode === 'cloud' 
+                                ? 'border-indigo-600 bg-white shadow-xl shadow-indigo-100' 
+                                : 'border-transparent bg-gray-50 grayscale opacity-60'
+                            }`}
+                          >
+                            <div className={`p-5 rounded-2xl ${settings.syncMode === 'cloud' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                              <Cloud className="w-8 h-8" />
+                            </div>
+                            <div className="text-right">
+                              <p className="font-black text-gray-900 text-xl">مزامنة سحابية</p>
+                              <p className="text-sm text-gray-500">نسخ احتياطي ومزامنة عبر الأجهزة</p>
+                            </div>
+                          </button>
+                        </div>
+                      )}
 
-                      {settings.syncMode === 'cloud' && (
+                      {settings.syncMode === 'cloud' && settings.deviceRole !== 'client' && (
                         <motion.div 
                           initial={{ opacity: 0, y: 20 }}
                           animate={{ opacity: 1, y: 0 }}
@@ -1043,21 +1022,23 @@ const Settings: React.FC = () => {
                               dir="ltr"
                             />
                           </div>
-                          <div className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-gray-100">
-                            <div className="relative inline-flex items-center cursor-pointer">
-                              <input 
-                                type="checkbox" 
-                                id="isOnlineMode"
-                                checked={settings.isOnlineMode}
-                                onChange={(e) => setSettings({ ...settings, isOnlineMode: e.target.checked })}
-                                className="sr-only peer" 
-                              />
-                              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                          {settings.deviceRole !== 'client' && (
+                            <div className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-gray-100">
+                              <div className="relative inline-flex items-center cursor-pointer">
+                                <input 
+                                  type="checkbox" 
+                                  id="isOnlineMode"
+                                  checked={settings.isOnlineMode}
+                                  onChange={(e) => setSettings({ ...settings, isOnlineMode: e.target.checked })}
+                                  className="sr-only peer" 
+                                />
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                              </div>
+                              <label htmlFor="isOnlineMode" className="text-sm font-bold text-gray-700 cursor-pointer">
+                                وضع الاتصال الدائم (Online Mode)
+                              </label>
                             </div>
-                            <label htmlFor="isOnlineMode" className="text-sm font-bold text-gray-700 cursor-pointer">
-                              وضع الاتصال الدائم (Online Mode)
-                            </label>
-                          </div>
+                          )}
                         </div>
                       </div>
                     </div>

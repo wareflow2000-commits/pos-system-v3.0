@@ -5,10 +5,11 @@ import { db, seedDatabase, seedUsers } from '../db/db';
 import { apiService } from '../services/apiService';
 import { syncService } from '../services/syncService';
 import { useAuth, Role } from '../context/AuthContext';
+import { useSyncStore } from '../store/syncStore';
+import SyncIndicator from './SyncIndicator';
 
 export default function Layout() {
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const { isOnline, isSyncing } = useSyncStore();
   const [logo, setLogo] = useState('');
   const [lowStockCount, setLowStockCount] = useState(0);
   const [themeName, setThemeName] = useState('modern');
@@ -25,35 +26,17 @@ export default function Layout() {
     });
     loadSettings();
     checkLowStock();
-
-    // Online/Offline listeners
-    const handleOnline = () => {
-      setIsOnline(true);
-      handleSync();
-    };
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
   }, []);
 
   const handleSync = async () => {
     if (isSyncing || !navigator.onLine) return;
     
-    setIsSyncing(true);
     try {
       await syncService.syncAll();
       await loadSettings();
       await checkLowStock();
     } catch (error) {
       console.error('Sync error:', error);
-    } finally {
-      setIsSyncing(false);
     }
   };
 
@@ -262,7 +245,9 @@ export default function Layout() {
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
+            <SyncIndicator />
+            <div className="h-6 w-px bg-gray-300"></div>
             {lowStockCount > 0 && (
               <button 
                 onClick={() => navigate('/inventory')}

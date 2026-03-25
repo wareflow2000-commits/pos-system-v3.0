@@ -18,7 +18,7 @@ import Shifts from './pages/Shifts';
 import Expenses from './pages/Expenses';
 import Suppliers from './pages/Suppliers';
 import Employees from './pages/Employees';
-import Onboarding, { BusinessType } from './pages/Onboarding';
+import Onboarding, { BusinessType, DeviceRole } from './pages/Onboarding';
 import Login from './pages/Login';
 import Returns from './pages/Returns';
 import Stocktaking from './pages/Stocktaking';
@@ -26,9 +26,11 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import ProtectedRoute from './components/ProtectedRoute';
 import { useSettings } from './hooks/useSettings';
+import { db } from './db/db';
 
 function AppContent() {
   const [businessType, setBusinessType] = useState<BusinessType | null>(null);
+  const [deviceRole, setDeviceRole] = useState<DeviceRole | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { user, isLoading: isAuthLoading } = useAuth();
   const settings = useSettings();
@@ -66,37 +68,76 @@ function AppContent() {
   ]);
 
   useEffect(() => {
-    const fetchBusinessType = async (retries = 3) => {
+    const fetchInitialSetup = async () => {
       try {
-        const res = await fetch('/api/settings/businessType');
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        // First check local Dexie DB for role and business type
+        const roleSetting = await db.settings.get('deviceRole');
+        const typeSetting = await db.settings.get('businessType');
         
-        const contentType = res.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          throw new Error('Server returned non-JSON response');
-        }
-        
-        const data = await res.json();
-        if (data && data.value) {
-          setBusinessType(data.value as BusinessType);
-        }
-        setIsLoading(false);
-      } catch (err) {
-        if (retries > 0) {
-          console.log(`Retrying fetch business type... (${retries} retries left)`);
-          setTimeout(() => fetchBusinessType(retries - 1), 1000);
+        // Check if it's a mobile device (Capacitor/Cordova)
+        const isMobileApp = !!(window as any).Capacitor || !!(window as any).cordova;
+
+        if (isMobileApp) {
+          // Force client role for mobile apps
+          setDeviceRole('client');
+          if (!roleSetting || roleSetting.value !== 'client') {
+             await db.settings.put({ key: 'deviceRole', value: 'client', syncStatus: 'synced' });
+          }
+          if (typeSetting && typeSetting.value) {
+            setBusinessType(typeSetting.value as BusinessType);
+          }
         } else {
-          console.error('Error fetching business type:', err);
-          setIsLoading(false);
+          if (roleSetting && roleSetting.value) {
+            setDeviceRole(roleSetting.value as DeviceRole);
+          }
+          if (typeSetting && typeSetting.value) {
+            setBusinessType(typeSetting.value as BusinessType);
+          } else {
+            // Fallback to server if not found locally (for existing setups, desktop only)
+            try {
+              const res = await fetch('/api/settings/businessType');
+              if (res.ok) {
+                const data = await res.json();
+                if (data && data.value) {
+                  setBusinessType(data.value as BusinessType);
+                  // Assume server role if it was already set up before this update
+                  if (!roleSetting) {
+                    setDeviceRole('server');
+                    await db.settings.put({ key: 'deviceRole', value: 'server', syncStatus: 'synced' });
+                  }
+                }
+              }
+            } catch (e) {
+              console.log('Server not reachable for initial setup check');
+            }
+          }
         }
+      } catch (err) {
+        console.error('Error fetching initial setup:', err);
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    fetchBusinessType();
+    fetchInitialSetup();
   }, []);
+
+  const handleOnboardingComplete = (type: BusinessType, role: DeviceRole) => {
+    setBusinessType(type);
+    setDeviceRole(role);
+  };
 
   if (isLoading || isAuthLoading) {
     return <div className="min-h-screen flex items-center justify-center bg-gray-50">جاري التحميل...</div>;
+  }
+
+  if (!businessType || !deviceRole) {
+    return (
+      <>
+        {settings.enableNotifications && <Toaster position="top-center" reverseOrder={false} />}
+        <Onboarding onComplete={handleOnboardingComplete} />
+      </>
+    );
   }
 
   if (!user) {
@@ -105,15 +146,6 @@ function AppContent() {
 
   // Smart redirection based on role/device
   const isMobileUser = user.deviceType === 'mobile' || user.role === 'sales_rep';
-
-  if (!businessType) {
-    return (
-      <>
-        {settings.enableNotifications && <Toaster position="top-center" reverseOrder={false} />}
-        <Onboarding onComplete={setBusinessType} />
-      </>
-    );
-  }
 
   return (
     <BrowserRouter>

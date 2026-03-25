@@ -1,8 +1,26 @@
 import { db } from '../db/db';
 import { apiService } from './apiService';
 import { supabaseService } from './supabaseService';
+import { useSyncStore } from '../store/syncStore';
 
 export const syncService = {
+  async updatePendingCount() {
+    const tables: any[] = [
+      'categories', 'products', 'customers', 'suppliers', 
+      'employees', 'expenses', 'shifts', 'orders', 'orderItems',
+      'purchases', 'purchaseItems', 'attendance', 'branches', 'payroll', 'offers',
+      'loyaltyTransactions', 'settings'
+    ];
+    let totalPending = 0;
+    for (const table of tables) {
+      if ((db as any)[table]) {
+        const count = await (db as any)[table].where('syncStatus').equals('pending').count();
+        totalPending += count;
+      }
+    }
+    useSyncStore.getState().setPendingItemsCount(totalPending);
+  },
+
   async syncAll() {
     const isOnlineSetting = await db.settings.where('key').equals('isOnlineMode').first();
     const isOnlineMode = isOnlineSetting ? isOnlineSetting.value === 'true' : false;
@@ -18,12 +36,9 @@ export const syncService = {
       throw new Error('لا يوجد اتصال بالإنترنت');
     }
 
-    try {
-      // If cloud sync is enabled, sync with Supabase
-      if (enableCloudSync) {
-        await supabaseService.syncAll();
-      }
+    useSyncStore.getState().setSyncing(true);
 
+    try {
       // Standard server sync (if online mode is enabled)
       if (isOnlineMode) {
         // Push local changes to server
@@ -33,10 +48,19 @@ export const syncService = {
         await this.pullAll();
       }
 
+      // If cloud sync is enabled, sync with Supabase
+      if (enableCloudSync) {
+        await supabaseService.syncAll();
+      }
+
+      useSyncStore.getState().setLastSynced(new Date());
+      await this.updatePendingCount();
       return true;
     } catch (error) {
       console.error('Sync failed:', error);
       throw error;
+    } finally {
+      useSyncStore.getState().setSyncing(false);
     }
   },
 
@@ -45,7 +69,7 @@ export const syncService = {
       'categories', 'products', 'customers', 'suppliers', 
       'employees', 'expenses', 'shifts', 'orders', 'orderItems',
       'purchases', 'purchaseItems', 'attendance', 'branches', 'payroll', 'offers',
-      'loyaltyTransactions'
+      'loyaltyTransactions', 'settings', 'auditLogs', 'stocktakingSessions', 'stocktakingEntries'
     ];
 
     for (const table of tables) {
@@ -146,6 +170,19 @@ export const syncService = {
           case 'settings':
             await apiService.updateSetting(record.key, record);
             break;
+          case 'auditLogs':
+            await apiService.createAuditLog(record);
+            break;
+          case 'stocktakingSessions':
+            if (record.status === 'closed') {
+              await apiService.updateStocktakingSession(record.id, record);
+            } else {
+              await apiService.createStocktakingSession(record);
+            }
+            break;
+          case 'stocktakingEntries':
+            await apiService.createStocktakingEntry(record);
+            break;
           // Add other cases as needed
         }
 
@@ -178,6 +215,9 @@ export const syncService = {
         { table: db.purchaseItems, api: () => apiService.getPurchaseItems() },
         { table: db.attendance, api: () => apiService.getAttendance() },
         { table: db.payroll, api: () => apiService.getPayroll() },
+        { table: db.auditLogs, api: () => apiService.getAuditLogs() },
+        { table: db.stocktakingSessions, api: () => apiService.getStocktakingSessions() },
+        { table: db.stocktakingEntries, api: () => apiService.getStocktakingEntries() },
       ];
 
       for (const task of pullTasks) {

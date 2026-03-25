@@ -55,7 +55,7 @@ export const supabaseService = {
       'categories', 'products', 'customers', 'suppliers', 
       'employees', 'expenses', 'shifts', 'orders', 'orderItems',
       'purchases', 'purchaseItems', 'attendance', 'branches', 'payroll', 'offers',
-      'loyaltyTransactions'
+      'loyaltyTransactions', 'settings', 'auditLogs'
     ];
 
     for (const table of tables) {

@@ -1,0 +1,312 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id            Int      @id @default(autoincrement())
+  barcode       String?  @unique
+  name          String
+  categoryId    Int?
+  costPrice     Float    @default(0)
+  sellingPrice  Float    @default(0)
+  stockQuantity Int      @default(0)
+  vatRate       Float    @default(0)
+  imageUrl      String?
+  branchId      Int?
+  syncStatus    String   @default("synced") // 'synced', 'pending', 'error'
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+}
+
+model Category {
+  id         Int      @id @default(autoincrement())
+  name       String
+  color      String?
+  icon       String?
+  branchId   Int?
+  syncStatus String   @default("synced")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Customer {
+  id         Int      @id @default(autoincrement())
+  name       String
+  phone      String?
+  email      String?
+  balance    Float    @default(0)
+  points     Int      @default(0)
+  branchId   Int?
+  syncStatus String   @default("synced")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Supplier {
+  id         Int      @id @default(autoincrement())
+  name       String
+  phone      String?
+  email      String?
+  address    String?
+  balance    Float    @default(0)
+  syncStatus String   @default("synced")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Order {
+  id             String      @id @default(uuid())
+  receiptNumber  String?
+  totalAmount    Float
+  discountAmount Float       @default(0)
+  taxAmount      Float       @default(0)
+  netAmount      Float
+  paymentMethod  String
+  customerId     Int?
+  customerName   String?
+  branchId       Int?
+  status         String
+  createdBy      String?     // اسم الموظف الذي أنشأ الطلب
+  syncStatus     String      @default("synced")
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  items          OrderItem[]
+}
+
+model OrderItem {
+  id          Int      @id @default(autoincrement())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   Int
+  productName String
+  quantity    Int
+  unitPrice   Float
+  subTotal    Float
+  taxAmount   Float
+  total       Float
+  syncStatus  String   @default("synced")
+  createdAt   DateTime @default(now())
+}
+
+model Shift {
+  id           String    @id @default(uuid())
+  startTime    DateTime
+  endTime      DateTime?
+  openingCash  Float     @default(0)
+  expectedCash Float     @default(0)
+  actualCash   Float?
+  branchId     Int?
+  status       String    @default("open") // 'open', 'closed'
+  syncStatus   String    @default("synced")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Expense {
+  id          Int      @id @default(autoincrement())
+  description String
+  amount      Float
+  category    String
+  date        DateTime
+  branchId    Int?
+  syncStatus  String   @default("synced")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Employee {
+  id          Int       @id @default(autoincrement())
+  name        String
+  username    String    @unique
+  password    String
+  role        String
+  phone       String?
+  salary      Float     @default(0)
+  branchId    Int?
+  pinCode     String?
+  deviceType  String    @default("desktop")
+  joinDate    DateTime?
+  status      String    @default("active")
+  permissions Json?     // تخزين الصلاحيات كـ JSON
+  syncStatus  String    @default("synced")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Setting {
+  id         Int      @id @default(autoincrement())
+  key        String   @unique
+  value      String   // يمكن أن يكون JSON String
+  syncStatus String   @default("synced")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Attendance {
+  id           String    @id @default(uuid())
+  employeeId   Int
+  employeeName String
+  date         DateTime
+  checkIn      DateTime
+  checkOut     DateTime?
+  totalHours   Float?
+  branchId     Int?
+  status       String    @default("present")
+  syncStatus   String    @default("synced")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model LoyaltyTransaction {
+  id         String   @id @default(uuid())
+  customerId Int
+  orderId    String?
+  points     Int
+  type       String   // 'earn', 'redeem'
+  date       DateTime
+  syncStatus String   @default("synced")
+  createdAt  DateTime @default(now())
+}
+
+model Branch {
+  id         Int      @id @default(autoincrement())
+  name       String
+  address    String?
+  phone      String?
+  status     String   @default("active")
+  syncStatus String   @default("synced")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Payroll {
+  id           Int      @id @default(autoincrement())
+  employeeId   Int
+  employeeName String
+  periodStart  DateTime
+  periodEnd    DateTime
+  totalHours   Float    @default(0)
+  hourlyRate   Float    @default(0)
+  basicSalary  Float    @default(0)
+  bonuses      Float    @default(0)
+  deductions   Float    @default(0)
+  netSalary    Float    @default(0)
+  paymentDate  DateTime?
+  status       String   @default("pending")
+  syncStatus   String   @default("synced")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Offer {
+  id                 Int       @id @default(autoincrement())
+  name               String
+  type               String
+  buyProductId       Int?
+  buyQuantity        Int?
+  getProductId       Int?
+  getQuantity        Int?
+  discountPercentage Float?
+  discountAmount     Float?
+  startDate          DateTime?
+  endDate            DateTime?
+  status             String    @default("active")
+  branchId           Int?
+  syncStatus         String    @default("synced")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+model Purchase {
+  id            String         @id @default(uuid())
+  supplierId    Int?
+  supplierName  String?
+  totalAmount   Float
+  paymentStatus String         @default("unpaid")
+  paidAmount    Float          @default(0)
+  date          DateTime
+  branchId      Int?
+  syncStatus    String         @default("synced")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  items         PurchaseItem[]
+}
+
+model PurchaseItem {
+  id          Int      @id @default(autoincrement())
+  purchaseId  String
+  purchase    Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  productId   Int
+  productName String
+  quantity    Int
+  costPrice   Float
+  total       Float
+  syncStatus  String   @default("synced")
+  createdAt   DateTime @default(now())
+}
+
+model AuditLog {
+  id            String   @id @default(uuid())
+  date          DateTime @default(now())
+  type          String
+  userName      String
+  action        String
+  details       String?
+  previousValue String?  // JSON String
+  newValue      String?  // JSON String
+  entityId      String?
+  entityName    String?
+}
+
+model JournalEntry {
+  id            String        @id @default(uuid())
+  date          DateTime      @default(now())
+  referenceId   String?
+  referenceType String?
+  description   String
+  totalDebit    Float         @default(0)
+  totalCredit   Float         @default(0)
+  syncStatus    String        @default("synced")
+  transactions  Transaction[]
+}
+
+model Transaction {
+  id             String       @id @default(uuid())
+  journalEntryId String
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  accountId      String
+  accountName    String
+  type           String       // 'debit', 'credit'
+  amount         Float
+  description    String?
+  syncStatus     String       @default("synced")
+}
+
+model StocktakingSession {
+  id         String             @id @default(uuid())
+  status     String             @default("open") // 'open', 'closed', 'approved'
+  createdAt  DateTime           @default(now())
+  createdBy  String?
+  branchId   Int?
+  syncStatus String             @default("synced")
+  entries    StocktakingEntry[]
+}
+
+model StocktakingEntry {
+  id             String             @id @default(uuid())
+  sessionId      String
+  session        StocktakingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  productId      Int
+  productName    String
+  barcode        String?
+  systemQuantity Int
+  actualQuantity Int
+  scannedBy      String?
+  scannedAt      DateTime           @default(now())
+  syncStatus     String             @default("synced")
+}

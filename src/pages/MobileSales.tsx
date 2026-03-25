@@ -1,3 +1,4 @@
+import { playSuccessSound, playErrorSound, playScanSound } from '../lib/sound';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   ShoppingBag, 
@@ -124,15 +125,18 @@ const MobileSales: React.FC = () => {
 
               const product = products.find(p => p.barcode === decodedText);
               if (product) {
+                playScanSound();
                 if (scannerMode === 'stocktaking') {
                   setScannedProduct(product);
                   setActualQuantity('');
                   setIsStocktakingModalOpen(true);
                   setIsScannerOpen(false);
                 } else {
-                  setScannedProduct(product);
+                  addToCart(product);
+                  toast.success(`${product.name} تمت إضافته للسلة`, { duration: 1000 });
                 }
               } else {
+                playErrorSound();
                 toast.error('المنتج غير موجود');
               }
             },
@@ -170,6 +174,7 @@ const MobileSales: React.FC = () => {
       return [...prev, { product, quantity: 1 }];
     });
     toast.success(`${product.name} تمت إضافته للسلة`, { duration: 1000 });
+    playSuccessSound();
   };
 
   const handleSaveStocktakingEntry = async () => {
@@ -191,6 +196,7 @@ const MobileSales: React.FC = () => {
       };
 
       await db.stocktakingEntries.add(entry);
+      playSuccessSound();
       toast.success(`تم جرد ${scannedProduct.name} بنجاح`);
       setIsStocktakingModalOpen(false);
       setScannedProduct(null);
@@ -231,8 +237,19 @@ const MobileSales: React.FC = () => {
   };
 
   const removeFromCart = (productId: number) => {
-    setCart(prev => prev.filter(item => item.product.id !== productId));
-    toast.success('تم حذف المنتج من السلة');
+    toast((t) => (
+      <div className="flex flex-col gap-2">
+        <p>هل أنت متأكد من حذف المنتج؟</p>
+        <div className="flex gap-2">
+          <button onClick={() => {
+            setCart(prev => prev.filter(item => item.product.id !== productId));
+            toast.dismiss(t.id);
+            toast.success('تم حذف المنتج');
+          }} className="bg-red-500 text-white px-4 py-2 rounded-xl">نعم</button>
+          <button onClick={() => toast.dismiss(t.id)} className="bg-gray-200 px-4 py-2 rounded-xl">لا</button>
+        </div>
+      </div>
+    ));
   };
 
   const clearCart = () => {
@@ -336,12 +353,14 @@ const MobileSales: React.FC = () => {
       });
 
       toast.success('تم إتمام الطلب بنجاح');
+      playSuccessSound();
       setCart([]);
       setSelectedCustomer(null);
       setIsCheckoutOpen(false);
       setActiveTab('invoices');
     } catch (error) {
       console.error(error);
+      playErrorSound();
       toast.error('حدث خطأ أثناء إتمام الطلب');
     }
   };
@@ -532,34 +551,6 @@ const MobileSales: React.FC = () => {
           )}
         </div>
 
-        {scannedProduct && scannerMode === 'sales' && (
-          <div className="mt-8 w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl animate-in fade-in slide-in-from-bottom-4">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center">
-                <Package className="w-8 h-8 text-indigo-600" />
-              </div>
-              <div>
-                <h3 className="font-bold text-lg">{scannedProduct.name}</h3>
-                <p className="text-sm text-gray-500">{scannedProduct.barcode}</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 gap-3">
-              <button 
-                onClick={() => { addToCart(scannedProduct); setScannedProduct(null); }}
-                className="bg-indigo-600 text-white py-4 rounded-2xl font-bold flex flex-col items-center gap-1 shadow-lg shadow-indigo-100"
-              >
-                <ShoppingBag className="w-5 h-5" />
-                <span>إضافة للبيع</span>
-              </button>
-            </div>
-            <button 
-              onClick={() => setScannedProduct(null)}
-              className="w-full mt-3 py-2 text-gray-400 text-sm font-medium"
-            >
-              إلغاء
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );

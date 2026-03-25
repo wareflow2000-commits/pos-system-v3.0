@@ -255,4 +255,32 @@ export const apiService = {
   async getSalesReport(params: { startDate?: string, endDate?: string, branchId?: number }) {
     return requestWithRetry(() => axios.get(`${API_BASE}/reports/sales`, { params }).then(r => r.data));
   },
+
+  async getAuditLogs() {
+    return requestWithRetry(() => axios.get(`${API_BASE}/auditLogs`).then(r => r.data));
+  },
+
+  async createAuditLog(log: any) {
+    return requestWithRetry(() => axios.post(`${API_BASE}/auditLogs`, log).then(r => r.data));
+  },
+
+  async getStocktakingSessions() {
+    return requestWithRetry(() => axios.get(`${API_BASE}/stocktakingSessions`).then(r => r.data));
+  },
+
+  async createStocktakingSession(session: any) {
+    return requestWithRetry(() => axios.post(`${API_BASE}/stocktakingSessions`, session).then(r => r.data));
+  },
+
+  async updateStocktakingSession(id: string, session: any) {
+    return requestWithRetry(() => axios.put(`${API_BASE}/stocktakingSessions/${id}`, session).then(r => r.data));
+  },
+
+  async getStocktakingEntries() {
+    return requestWithRetry(() => axios.get(`${API_BASE}/stocktakingEntries`).then(r => r.data));
+  },
+
+  async createStocktakingEntry(entry: any) {
+    return requestWithRetry(() => axios.post(`${API_BASE}/stocktakingEntries`, entry).then(r => r.data));
+  },
 };
