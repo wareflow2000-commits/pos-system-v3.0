@@ -1,6 +1,5 @@
 import { db } from '../db/db';
 import { apiService } from './apiService';
-import { supabaseService } from './supabaseService';
 import { useSyncStore } from '../store/syncStore';
 
 export const syncService = {
@@ -46,11 +45,6 @@ export const syncService = {
         
         // Pull changes from server to local
         await this.pullAll();
-      }
-
-      // If cloud sync is enabled, sync with Supabase
-      if (enableCloudSync) {
-        await supabaseService.syncAll();
       }
 
       useSyncStore.getState().setLastSynced(new Date());

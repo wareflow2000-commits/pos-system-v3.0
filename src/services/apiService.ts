@@ -295,4 +295,8 @@ export const apiService = {
   async updateInventoryBatch(id: number, batch: any) {
     return requestWithRetry(() => axios.put(`${API_BASE}/inventoryBatches/${id}`, batch).then(r => r.data));
   },
+
+  async getBackup() {
+    window.open(`${API_BASE}/backup`, '_blank');
+  }
 };

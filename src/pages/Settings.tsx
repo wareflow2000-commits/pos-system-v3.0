@@ -33,8 +33,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db } from '../db/db';
-import { updateApiBase } from '../services/apiService';
-import { initSupabase } from '../services/supabaseService';
+import { updateApiBase, apiService } from '../services/apiService';
 import toast from 'react-hot-toast';
 
 const Settings: React.FC = () => {
@@ -125,9 +124,6 @@ const Settings: React.FC = () => {
       
       // Update API Base URL
       updateApiBase(settings.serverUrl);
-      
-      // Re-init Supabase if needed
-      await initSupabase();
     } catch (error) {
       toast.error('خطأ في حفظ الإعدادات');
     }
@@ -1064,16 +1060,28 @@ const Settings: React.FC = () => {
                       <h2 className="text-xl font-bold">إدارة البيانات والنسخ الاحتياطي</h2>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-4">
-                        <h3 className="font-bold text-gray-800">نسخ احتياطي يدوي</h3>
-                        <p className="text-sm text-gray-500">قم بتنزيل نسخة من جميع بيانات النظام الحالية.</p>
+                        <h3 className="font-bold text-gray-800">تصدير (JSON)</h3>
+                        <p className="text-sm text-gray-500">قم بتنزيل نسخة من جميع بيانات النظام الحالية كملف JSON.</p>
                         <button 
                           onClick={handleExportData}
                           className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors"
                         >
                           <Download className="w-5 h-5" />
                           تنزيل نسخة احتياطية
+                        </button>
+                      </div>
+
+                      <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-4">
+                        <h3 className="font-bold text-gray-800">نسخ احتياطي (SQLite)</h3>
+                        <p className="text-sm text-gray-500">تحميل ملف قاعدة البيانات كاملاً.</p>
+                        <button 
+                          onClick={() => apiService.getBackup()}
+                          className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 transition-colors"
+                        >
+                          <Database className="w-5 h-5" />
+                          تنزيل ملف SQLite
                         </button>
                       </div>
 
