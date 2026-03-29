@@ -77,6 +77,7 @@ const Settings: React.FC = () => {
     isOnlineMode: false,
     serverUrl: 'http://localhost:3000',
     deviceRole: 'server',
+    exchangeRate: 1, // Default exchange rate
   });
 
   const [loading, setLoading] = useState(true);
@@ -499,6 +500,17 @@ const Settings: React.FC = () => {
                           onChange={(e) => setSettings({ ...settings, currency: e.target.value })}
                           className="w-full px-5 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all"
                         />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-gray-700">سعر الصرف (للدولار)</label>
+                        <input 
+                          type="number" 
+                          step="0.01"
+                          value={settings.exchangeRate}
+                          onChange={(e) => setSettings({ ...settings, exchangeRate: Number(e.target.value) })}
+                          className="w-full px-5 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">يستخدم لحساب تكلفة المنتجات المستوردة</p>
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm font-bold text-gray-700">نسبة ضريبة القيمة المضافة (%)</label>

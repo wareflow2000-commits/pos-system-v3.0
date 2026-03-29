@@ -7,6 +7,7 @@ export interface CartItem extends Product {
   discount: number; // Percentage or fixed
   discountType: 'percentage' | 'fixed';
   costPriceAtTimeOfSale: number; // Added for accurate COGS
+  selectedUnit: 'piece' | 'box'; // The unit selected for this cart item
 }
 
 interface CartState {
@@ -17,9 +18,10 @@ interface CartState {
   taxRate: number; // Global tax rate from settings
   
   // Actions
-  addItem: (product: Product) => void;
+  addItem: (product: Product, unit?: 'piece' | 'box') => void;
   removeItem: (cartItemId: string) => void;
   updateQuantity: (cartItemId: string, quantity: number) => void;
+  updateItemUnit: (cartItemId: string, unit: 'piece' | 'box') => void;
   updateItemDiscount: (cartItemId: string, discount: number, type: 'percentage' | 'fixed') => void;
   clearCart: () => void;
   setGlobalDiscount: (discount: number, type: 'percentage' | 'fixed') => void;
@@ -33,6 +35,14 @@ interface CartState {
   getGrandTotal: () => number;
 }
 
+export const getItemPrice = (item: CartItem) => {
+  const basePrice = Number(item.sellingPrice) || 0;
+  if (item.selectedUnit === 'box' && item.conversionFactor) {
+    return basePrice * (Number(item.conversionFactor) || 1);
+  }
+  return basePrice;
+};
+
 export const useCartStore = create<CartState>((set, get) => ({
   items: [],
   globalDiscount: 0,
@@ -40,13 +50,13 @@ export const useCartStore = create<CartState>((set, get) => ({
   offerDiscount: 0,
   taxRate: 15,
 
-  addItem: (product) => {
+  addItem: (product, unit = 'piece') => {
     set((state) => {
-      const existingItem = state.items.find((item) => item.id === product.id);
+      const existingItem = state.items.find((item) => item.id === product.id && item.selectedUnit === unit);
       if (existingItem) {
         return {
           items: state.items.map((item) =>
-            item.id === product.id
+            item.id === product.id && item.selectedUnit === unit
               ? { ...item, cartQuantity: item.cartQuantity + 1 }
               : item
           ),
@@ -62,7 +72,8 @@ export const useCartStore = create<CartState>((set, get) => ({
             discount: 0,
             discountType: 'percentage',
             costPriceAtTimeOfSale: product.costPrice,
-            vatRate: state.taxRate // Use global tax rate
+            vatRate: state.taxRate, // Use global tax rate
+            selectedUnit: unit
           },
         ],
       };
@@ -79,6 +90,14 @@ export const useCartStore = create<CartState>((set, get) => ({
     set((state) => ({
       items: state.items.map((item) =>
         item.cartItemId === cartItemId ? { ...item, cartQuantity: Math.max(1, quantity) } : item
+      ),
+    }));
+  },
+
+  updateItemUnit: (cartItemId, unit) => {
+    set((state) => ({
+      items: state.items.map((item) =>
+        item.cartItemId === cartItemId ? { ...item, selectedUnit: unit } : item
       ),
     }));
   },
@@ -114,7 +133,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   getSubTotal: () => {
     const { items } = get();
     return items.reduce((total, item) => {
-      const price = Number(item.sellingPrice) || 0;
+      const price = getItemPrice(item);
       const qty = Number(item.cartQuantity) || 0;
       return total + price * qty;
     }, 0);
@@ -125,7 +144,7 @@ export const useCartStore = create<CartState>((set, get) => ({
     
     // First calculate total discount on items
     const itemsDiscountTotal = items.reduce((total, item) => {
-      const itemTotal = (Number(item.sellingPrice) || 0) * (Number(item.cartQuantity) || 0);
+      const itemTotal = getItemPrice(item) * (Number(item.cartQuantity) || 0);
       const discount = Number(item.discount) || 0;
       return total + (item.discountType === 'percentage' ? itemTotal * (discount / 100) : discount);
     }, 0);
@@ -144,7 +163,7 @@ export const useCartStore = create<CartState>((set, get) => ({
 
     // Distribute order discount proportionally to calculate tax correctly
     return items.reduce((total, item) => {
-      const itemTotal = (Number(item.sellingPrice) || 0) * (Number(item.cartQuantity) || 0);
+      const itemTotal = getItemPrice(item) * (Number(item.cartQuantity) || 0);
       const discount = Number(item.discount) || 0;
       const itemDiscount = item.discountType === 'percentage' 
         ? itemTotal * (discount / 100) 
@@ -167,7 +186,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   getDiscountTotal: () => {
     const { items, globalDiscount, globalDiscountType, offerDiscount } = get();
     const itemsDiscount = items.reduce((total, item) => {
-      const itemTotal = (Number(item.sellingPrice) || 0) * (Number(item.cartQuantity) || 0);
+      const itemTotal = getItemPrice(item) * (Number(item.cartQuantity) || 0);
       const discount = Number(item.discount) || 0;
       return total + (item.discountType === 'percentage' ? itemTotal * (discount / 100) : discount);
     }, 0);

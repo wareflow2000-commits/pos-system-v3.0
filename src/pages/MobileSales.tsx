@@ -42,7 +42,7 @@ const MobileSales: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('sales');
   const [selectedCategory, setSelectedCategory] = useState<string | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [cart, setCart] = useState<{product: Product, quantity: number}[]>([]);
+  const [cart, setCart] = useState<{product: Product, quantity: number, unit: 'piece' | 'box'}[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -161,17 +161,17 @@ const MobileSales: React.FC = () => {
     };
   }, [isScannerOpen, products]);
 
-  const addToCart = (product: Product) => {
+  const addToCart = (product: Product, unit: 'piece' | 'box' = 'piece') => {
     setCart(prev => {
-      const existing = prev.find(item => item.product.id === product.id);
+      const existing = prev.find(item => item.product.id === product.id && item.unit === unit);
       if (existing) {
         return prev.map(item => 
-          item.product.id === product.id 
+          item.product.id === product.id && item.unit === unit
             ? { ...item, quantity: item.quantity + 1 } 
             : item
         );
       }
-      return [...prev, { product, quantity: 1 }];
+      return [...prev, { product, quantity: 1, unit }];
     });
     toast.success(`${product.name} تمت إضافته للسلة`, { duration: 1000 });
     playSuccessSound();
@@ -226,9 +226,9 @@ const MobileSales: React.FC = () => {
     }
   };
 
-  const updateQuantity = (productId: number, delta: number) => {
+  const updateQuantity = (productId: number, unit: 'piece' | 'box', delta: number) => {
     setCart(prev => prev.map(item => {
-      if (item.product.id === productId) {
+      if (item.product.id === productId && item.unit === unit) {
         const newQty = Math.max(1, item.quantity + delta);
         return { ...item, quantity: newQty };
       }
@@ -236,13 +236,13 @@ const MobileSales: React.FC = () => {
     }));
   };
 
-  const removeFromCart = (productId: number) => {
+  const removeFromCart = (productId: number, unit: 'piece' | 'box') => {
     toast((t) => (
       <div className="flex flex-col gap-2">
         <p>هل أنت متأكد من حذف المنتج؟</p>
         <div className="flex gap-2">
           <button onClick={() => {
-            setCart(prev => prev.filter(item => item.product.id !== productId));
+            setCart(prev => prev.filter(item => !(item.product.id === productId && item.unit === unit)));
             toast.dismiss(t.id);
             toast.success('تم حذف المنتج');
           }} className="bg-red-500 text-white px-4 py-2 rounded-xl">نعم</button>
@@ -258,7 +258,15 @@ const MobileSales: React.FC = () => {
     toast.success('تم إلغاء الفاتورة');
   };
 
-  const subtotal = cart.reduce((sum, item) => sum + (item.product.sellingPrice * item.quantity), 0);
+  const getMobileItemPrice = (item: { product: Product, unit: 'piece' | 'box' }) => {
+    const basePrice = Number(item.product.sellingPrice) || 0;
+    if (item.unit === 'box' && item.product.conversionFactor) {
+      return basePrice * (Number(item.product.conversionFactor) || 1);
+    }
+    return basePrice;
+  };
+
+  const subtotal = cart.reduce((sum, item) => sum + (getMobileItemPrice(item) * item.quantity), 0);
 
   const offerDiscount = useMemo(() => {
     let totalOfferDiscount = 0;
@@ -268,7 +276,7 @@ const MobileSales: React.FC = () => {
         if (offer.applicableProducts && offer.applicableProducts.length > 0) {
           cart.forEach(item => {
             if (offer.applicableProducts!.includes(item.product.id!)) {
-              totalOfferDiscount += (item.product.sellingPrice * item.quantity) * (offer.value / 100);
+              totalOfferDiscount += (getMobileItemPrice(item) * item.quantity) * (offer.value / 100);
             }
           });
         } else {
@@ -279,7 +287,7 @@ const MobileSales: React.FC = () => {
           cart.forEach(item => {
             if (offer.applicableProducts!.includes(item.product.id!)) {
               const freeItems = Math.floor(item.quantity / 2);
-              totalOfferDiscount += freeItems * item.product.sellingPrice;
+              totalOfferDiscount += freeItems * getMobileItemPrice(item);
             }
           });
         }
@@ -326,17 +334,21 @@ const MobileSales: React.FC = () => {
         syncStatus: 'pending'
       };
 
-      const orderItems = cart.map(item => ({
-        orderId,
-        productId: item.product.id!,
-        productName: item.product.name,
-        quantity: item.quantity,
-        unitPrice: item.product.sellingPrice,
-        subTotal: item.product.sellingPrice * item.quantity,
-        taxAmount: (item.product.sellingPrice * item.quantity) * (storeSettings.taxRate / 100),
-        total: (item.product.sellingPrice * item.quantity) * (1 + storeSettings.taxRate / 100),
-        syncStatus: 'pending'
-      }));
+      const orderItems = cart.map(item => {
+        const unitPrice = getMobileItemPrice(item);
+        const factor = item.unit === 'box' ? (item.product.conversionFactor || 1) : 1;
+        return {
+          orderId,
+          productId: item.product.id!,
+          productName: item.product.name,
+          quantity: item.quantity,
+          unitPrice: unitPrice,
+          subTotal: unitPrice * item.quantity,
+          taxAmount: (unitPrice * item.quantity) * (storeSettings.taxRate / 100),
+          total: (unitPrice * item.quantity) * (1 + storeSettings.taxRate / 100),
+          syncStatus: 'pending'
+        };
+      });
 
       await db.transaction('rw', [db.orders, db.orderItems, db.products, db.customers], async () => {
         await db.orders.add(newOrder);
@@ -344,8 +356,9 @@ const MobileSales: React.FC = () => {
         for (const item of cart) {
           const product = await db.products.get(item.product.id!);
           if (product) {
+            const factor = item.unit === 'box' ? (item.product.conversionFactor || 1) : 1;
             await db.products.update(product.id!, {
-              stockQuantity: product.stockQuantity - item.quantity,
+              stockQuantity: product.stockQuantity - (item.quantity * factor),
               syncStatus: 'pending'
             });
           }
@@ -431,6 +444,9 @@ const MobileSales: React.FC = () => {
               </div>
               <h3 className="text-sm font-bold text-gray-900 truncate">{product.name}</h3>
               <p className="text-indigo-600 font-black mt-1">{product.sellingPrice} {storeSettings.currency}</p>
+              {product.priceInUSD && (
+                <p className="text-[10px] text-gray-500 font-medium">${product.priceInUSD.toFixed(2)}</p>
+              )}
               <p className="text-[10px] text-gray-400 mt-1">مخزون: {product.stockQuantity}</p>
             </div>
           ))}
@@ -515,6 +531,9 @@ const MobileSales: React.FC = () => {
               <div className="text-left">
                 <p className="text-sm font-black text-indigo-600">{product.stockQuantity} {product.unit || 'حبة'}</p>
                 <p className="text-[10px] text-gray-400">{product.sellingPrice} {storeSettings.currency}</p>
+                {product.priceInUSD && (
+                  <p className="text-[10px] text-gray-500 font-medium">${product.priceInUSD.toFixed(2)}</p>
+                )}
               </div>
             </div>
           ))}
@@ -894,22 +913,41 @@ const MobileSales: React.FC = () => {
               <div className="space-y-4">
                 <label className="block text-sm font-bold text-gray-700">المنتجات المختارة</label>
                 {cart.map(item => (
-                  <div key={item.product.id} className="flex items-center gap-3 bg-gray-50 p-3 rounded-2xl border border-gray-100">
+                  <div key={`${item.product.id}-${item.unit}`} className="flex items-center gap-3 bg-gray-50 p-3 rounded-2xl border border-gray-100">
                     <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shrink-0 overflow-hidden">
                       {item.product.imageUrl ? <img src={item.product.imageUrl} className="w-full h-full object-cover" /> : <Package className="w-6 h-6 text-gray-300" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <h4 className="text-sm font-bold truncate">{item.product.name}</h4>
-                      <p className="text-xs text-gray-500">{item.product.sellingPrice} {storeSettings.currency}</p>
+                      <div className="flex flex-col gap-1 mt-1">
+                        <p className="text-xs text-gray-500">{getMobileItemPrice(item).toFixed(2)} {storeSettings.currency}</p>
+                        {item.product.unit === 'box' && (
+                          <select
+                            value={item.unit}
+                            onChange={(e) => {
+                              const newUnit = e.target.value as 'piece' | 'box';
+                              setCart(prev => prev.map(i => 
+                                i.product.id === item.product.id && i.unit === item.unit 
+                                  ? { ...i, unit: newUnit } 
+                                  : i
+                              ));
+                            }}
+                            className="text-xs border border-gray-200 rounded p-1 bg-white text-gray-700 outline-none focus:border-indigo-500 w-fit"
+                          >
+                            <option value="piece">حبة</option>
+                            <option value="box">صندوق ({item.product.conversionFactor} حبة)</option>
+                          </select>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="flex items-center gap-3 bg-white px-2 py-1 rounded-xl border border-gray-100">
-                        <button onClick={() => updateQuantity(item.product.id!, -1)} className="p-1 text-gray-400"><Minus className="w-4 h-4" /></button>
+                        <button onClick={() => updateQuantity(item.product.id!, item.unit, -1)} className="p-1 text-gray-400"><Minus className="w-4 h-4" /></button>
                         <span className="font-bold text-sm w-4 text-center">{item.quantity}</span>
-                        <button onClick={() => updateQuantity(item.product.id!, 1)} className="p-1 text-indigo-600"><Plus className="w-4 h-4" /></button>
+                        <button onClick={() => updateQuantity(item.product.id!, item.unit, 1)} className="p-1 text-indigo-600"><Plus className="w-4 h-4" /></button>
                       </div>
                       <button 
-                        onClick={() => removeFromCart(item.product.id!)}
+                        onClick={() => removeFromCart(item.product.id!, item.unit)}
                         className="p-2 text-red-500 bg-white rounded-xl border border-gray-100 hover:bg-red-50"
                       >
                         <Trash2 className="w-4 h-4" />

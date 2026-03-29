@@ -283,4 +283,16 @@ export const apiService = {
   async createStocktakingEntry(entry: any) {
     return requestWithRetry(() => axios.post(`${API_BASE}/stocktakingEntries`, entry).then(r => r.data));
   },
+
+  async getInventoryBatches() {
+    return requestWithRetry(() => axios.get(`${API_BASE}/inventoryBatches`).then(r => r.data));
+  },
+
+  async createInventoryBatch(batch: any) {
+    return requestWithRetry(() => axios.post(`${API_BASE}/inventoryBatches`, batch).then(r => r.data));
+  },
+
+  async updateInventoryBatch(id: number, batch: any) {
+    return requestWithRetry(() => axios.put(`${API_BASE}/inventoryBatches/${id}`, batch).then(r => r.data));
+  },
 };

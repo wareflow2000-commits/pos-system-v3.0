@@ -71,8 +71,8 @@ function AppContent() {
     const fetchInitialSetup = async () => {
       try {
         // First check local Dexie DB for role and business type
-        const roleSetting = await db.settings.get('deviceRole');
-        const typeSetting = await db.settings.get('businessType');
+        const roleSetting = await db.settings.where('key').equals('deviceRole').first();
+        const typeSetting = await db.settings.where('key').equals('businessType').first();
         
         // Check if it's a mobile device (Capacitor/Cordova)
         const isMobileApp = !!(window as any).Capacitor || !!(window as any).cordova;
@@ -81,7 +81,7 @@ function AppContent() {
           // Force client role for mobile apps
           setDeviceRole('client');
           if (!roleSetting || roleSetting.value !== 'client') {
-             await db.settings.put({ key: 'deviceRole', value: 'client', syncStatus: 'synced' });
+             await db.settings.put({ key: 'deviceRole', value: 'client', syncStatus: 'synced', updatedAt: new Date().toISOString() });
           }
           if (typeSetting && typeSetting.value) {
             setBusinessType(typeSetting.value as BusinessType);
@@ -103,7 +103,7 @@ function AppContent() {
                   // Assume server role if it was already set up before this update
                   if (!roleSetting) {
                     setDeviceRole('server');
-                    await db.settings.put({ key: 'deviceRole', value: 'server', syncStatus: 'synced' });
+                    await db.settings.put({ key: 'deviceRole', value: 'server', syncStatus: 'synced', updatedAt: new Date().toISOString() });
                   }
                 }
               }

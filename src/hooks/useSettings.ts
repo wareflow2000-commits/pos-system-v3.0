@@ -43,7 +43,8 @@ export function useSettings() {
     serverUrl: '',
     themeName: 'modern' as 'modern' | 'classic' | 'brutalist' | 'glassmorphism' | 'playful',
     businessType: 'multi' as 'supermarket' | 'pharmacy' | 'apparel' | 'restaurant' | 'electronics' | 'hardware' | 'bookstore' | 'multi',
-    deviceRole: 'server' as 'server' | 'client'
+    deviceRole: 'server' as 'server' | 'client',
+    exchangeRate: 1
   };
 
   settings.forEach(setting => {

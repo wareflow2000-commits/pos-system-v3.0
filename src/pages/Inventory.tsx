@@ -74,13 +74,16 @@ export default function Inventory() {
     categoryId: 1,
     costPrice: '',
     sellingPrice: '',
+    costInUSD: '',
+    priceInUSD: '',
     stockQuantity: '',
     minStockLevel: '5',
     vatRate: storeSettings.taxRate.toString(),
     imageUrl: '',
     expiryDate: '',
     batchNumber: '',
-    unit: 'حبة'
+    unit: 'piece',
+    conversionFactor: '1'
   });
 
   useEffect(() => {
@@ -98,13 +101,16 @@ export default function Inventory() {
         categoryId: product.categoryId,
         costPrice: product.costPrice.toString(),
         sellingPrice: product.sellingPrice.toString(),
+        costInUSD: product.costInUSD?.toString() || '',
+        priceInUSD: product.priceInUSD?.toString() || '',
         stockQuantity: product.stockQuantity.toString(),
         minStockLevel: (product.minStockLevel || 5).toString(),
         vatRate: product.vatRate.toString(),
         imageUrl: product.imageUrl || '',
         expiryDate: product.expiryDate || '',
         batchNumber: product.batchNumber || '',
-        unit: product.unit || 'حبة'
+        unit: product.unit || 'piece',
+        conversionFactor: (product.conversionFactor || 1).toString()
       });
     } else {
       setEditingProduct(null);
@@ -114,13 +120,16 @@ export default function Inventory() {
         categoryId: categories.length > 0 ? categories[0].id! : 1,
         costPrice: '',
         sellingPrice: '',
+        costInUSD: '',
+        priceInUSD: '',
         stockQuantity: '',
         minStockLevel: '5',
         vatRate: storeSettings.taxRate.toString(),
         imageUrl: '',
         expiryDate: '',
         batchNumber: '',
-        unit: 'حبة'
+        unit: 'piece',
+        conversionFactor: '1'
       });
     }
     setIsModalOpen(true);
@@ -309,13 +318,16 @@ export default function Inventory() {
         categoryId: Number(formData.categoryId),
         costPrice: Number(formData.costPrice),
         sellingPrice: Number(formData.sellingPrice),
+        costInUSD: formData.costInUSD ? Number(formData.costInUSD) : undefined,
+        priceInUSD: formData.priceInUSD ? Number(formData.priceInUSD) : undefined,
         stockQuantity: Number(formData.stockQuantity),
         minStockLevel: Number(formData.minStockLevel),
         vatRate: Number(formData.vatRate),
         imageUrl: formData.imageUrl,
         expiryDate: formData.expiryDate || undefined,
         batchNumber: formData.batchNumber || undefined,
-        unit: formData.unit || 'حبة',
+        unit: formData.unit || 'piece',
+        conversionFactor: Number(formData.conversionFactor) || 1,
         updatedAt: new Date().toISOString(),
         syncStatus: 'pending'
       };
@@ -348,6 +360,46 @@ export default function Inventory() {
         console.error(error);
         toast.error('حدث خطأ أثناء حذف المنتج');
       }
+    }
+  };
+
+  const handleUpdatePricesFromExchangeRate = async () => {
+    if (!storeSettings.exchangeRate || storeSettings.exchangeRate <= 0) {
+      toast.error('يرجى تعيين سعر صرف صحيح في الإعدادات أولاً');
+      return;
+    }
+
+    if (!confirm(`هل أنت متأكد من تحديث جميع الأسعار بناءً على سعر الصرف الحالي (${storeSettings.exchangeRate})؟ سيتم تحديث المنتجات التي لها سعر بالدولار فقط.`)) {
+      return;
+    }
+
+    try {
+      const productsToUpdate = allProducts.filter(p => p.priceInUSD || p.costInUSD);
+      
+      if (productsToUpdate.length === 0) {
+        toast('لا توجد منتجات مسعرة بالدولار لتحديثها', { icon: 'ℹ️' });
+        return;
+      }
+
+      const updates = productsToUpdate.map(p => {
+        const updatedProduct = { ...p };
+        if (p.priceInUSD) {
+          updatedProduct.sellingPrice = Number((p.priceInUSD * storeSettings.exchangeRate).toFixed(2));
+        }
+        if (p.costInUSD) {
+          updatedProduct.costPrice = Number((p.costInUSD * storeSettings.exchangeRate).toFixed(2));
+        }
+        updatedProduct.updatedAt = new Date().toISOString();
+        updatedProduct.syncStatus = 'pending';
+        return updatedProduct;
+      });
+
+      await db.products.bulkPut(updates);
+      await logAction(user?.name || 'Unknown', 'تحديث أسعار', 'product', `تم تحديث أسعار ${updates.length} منتج بناءً على سعر الصرف`, 0, 0);
+      toast.success(`تم تحديث أسعار ${updates.length} منتج بنجاح`);
+    } catch (error) {
+      console.error(error);
+      toast.error('حدث خطأ أثناء تحديث الأسعار');
     }
   };
 
@@ -487,6 +539,14 @@ export default function Inventory() {
                 تصدير CSV
               </button>
               <button 
+                onClick={handleUpdatePricesFromExchangeRate}
+                className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-4 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm border border-indigo-200"
+                title={`تحديث الأسعار بناءً على سعر الصرف الحالي (${storeSettings.exchangeRate})`}
+              >
+                <RefreshCcw className="w-5 h-5" />
+                تحديث الأسعار
+              </button>
+              <button 
                 onClick={() => {
                   if (storeSettings.scannerType === 'camera') {
                     setIsCameraScannerOpen(true);
@@ -605,6 +665,7 @@ export default function Inventory() {
                 <th scope="col" className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">الباركود</th>
                 <th scope="col" className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">التكلفة</th>
                 <th scope="col" className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">سعر البيع</th>
+                <th scope="col" className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">السعر ($)</th>
                 <th scope="col" className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">الربح</th>
                 <th scope="col" className="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">الكمية</th>
                 {storeSettings.businessType === 'pharmacy' && (
@@ -640,6 +701,9 @@ export default function Inventory() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600">
                     {product.sellingPrice.toFixed(2)} {storeSettings.currency}
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {product.priceInUSD ? `$${product.priceInUSD.toFixed(2)}` : '-'}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-emerald-600 font-bold">
                     {(product.sellingPrice - product.costPrice).toFixed(2)}
                   </td>
@@ -649,7 +713,8 @@ export default function Inventory() {
                       product.stockQuantity > 0 ? 'bg-orange-100 text-orange-800' : 
                       'bg-rose-100 text-rose-800'
                     }`}>
-                      {product.stockQuantity} {product.unit || 'حبة'}
+                      {product.stockQuantity} {product.unit === 'box' ? 'صندوق' : 'حبة'}
+                      {product.unit === 'box' && ` (${product.conversionFactor} حبة)`}
                     </span>
                   </td>
                   {storeSettings.businessType === 'pharmacy' && (
@@ -845,12 +910,15 @@ export default function Inventory() {
                             id: editingProduct?.id,
                             costPrice: Number(formData.costPrice) || 0,
                             sellingPrice: Number(formData.sellingPrice) || 0,
+                            costInUSD: formData.costInUSD ? Number(formData.costInUSD) : undefined,
+                            priceInUSD: formData.priceInUSD ? Number(formData.priceInUSD) : undefined,
                             stockQuantity: Number(formData.stockQuantity) || 0,
                             minStockLevel: Number(formData.minStockLevel) || 0,
                             vatRate: Number(formData.vatRate) || 0,
+                            conversionFactor: Number(formData.conversionFactor) || 1,
                             syncStatus: 'pending',
                             updatedAt: new Date().toISOString()
-                          } as Product)}
+                          } as unknown as Product)}
                           className="px-3 py-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors flex items-center justify-center shrink-0"
                           title="طباعة الباركود"
                         >
@@ -895,18 +963,68 @@ export default function Inventory() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">الوحدة</label>
-                    <input 
-                      type="text" 
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">الوحدة الأساسية</label>
+                    <select 
                       required
-                      placeholder="حبة، كرتون، متر..."
                       value={formData.unit}
                       onChange={e => setFormData({...formData, unit: e.target.value})}
+                      className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                    >
+                      <option value="piece">قطعة / حبة</option>
+                      <option value="box">صندوق / كرتون</option>
+                    </select>
+                  </div>
+                  {formData.unit === 'box' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">عدد القطع في الصندوق</label>
+                      <input 
+                        type="number" 
+                        required
+                        min="1"
+                        value={formData.conversionFactor}
+                        onChange={e => setFormData({...formData, conversionFactor: e.target.value})}
+                        className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none" 
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">التكلفة (بالدولار)</label>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      min="0"
+                      value={formData.costInUSD}
+                      onChange={e => {
+                        const usd = e.target.value;
+                        setFormData({
+                          ...formData, 
+                          costInUSD: usd,
+                          costPrice: usd ? (Number(usd) * (storeSettings.exchangeRate || 1)).toFixed(2) : formData.costPrice
+                        });
+                      }}
                       className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none" 
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">التكلفة</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">سعر البيع (بالدولار)</label>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      min="0"
+                      value={formData.priceInUSD}
+                      onChange={e => {
+                        const usd = e.target.value;
+                        setFormData({
+                          ...formData, 
+                          priceInUSD: usd,
+                          sellingPrice: usd ? (Number(usd) * (storeSettings.exchangeRate || 1)).toFixed(2) : formData.sellingPrice
+                        });
+                      }}
+                      className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">التكلفة ({storeSettings.currency})</label>
                     <input 
                       type="number" 
                       required
@@ -918,7 +1036,7 @@ export default function Inventory() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">سعر البيع</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">سعر البيع ({storeSettings.currency})</label>
                     <input 
                       type="number" 
                       required

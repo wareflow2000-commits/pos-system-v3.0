@@ -6,7 +6,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, Category, Product, Order, OrderItem, Customer, Shift, Offer, JournalEntry } from '../db/db';
 import { logAction } from '../services/auditService';
 import { useAuth } from '../context/AuthContext';
-import { useCartStore } from '../store/useCartStore';
+import { useCartStore, getItemPrice } from '../store/useCartStore';
 import { useSettings } from '../hooks/useSettings';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Receipt as ReceiptComponent } from '../components/Receipt';
@@ -28,7 +28,7 @@ export default function POS() {
   const [orderType, setOrderType] = useState<'dine_in' | 'takeaway' | 'delivery'>('dine_in');
   const receiptRef = useRef<HTMLDivElement>(null);
   const storeSettings = useSettings();
-  const { items, addItem, updateQuantity, updateItemDiscount, clearCart, setGlobalDiscount, getSubTotal, getDiscountTotal, getTaxTotal, getGrandTotal, setTaxRate } = useCartStore();
+  const { items, addItem, updateQuantity, updateItemUnit, updateItemDiscount, clearCart, setGlobalDiscount, getSubTotal, getDiscountTotal, getTaxTotal, getGrandTotal, setTaxRate } = useCartStore();
 
   useEffect(() => {
     if (storeSettings.taxRate !== undefined) {
@@ -68,7 +68,7 @@ export default function POS() {
           // Apply to specific products
           items.forEach(item => {
             if (offer.applicableProducts!.includes(item.id!)) {
-              totalOfferDiscount += (item.sellingPrice * item.cartQuantity) * (offer.value / 100);
+              totalOfferDiscount += (getItemPrice(item) * item.cartQuantity) * (offer.value / 100);
             }
           });
         } else {
@@ -80,7 +80,7 @@ export default function POS() {
           items.forEach(item => {
             if (offer.applicableProducts!.includes(item.id!)) {
               const freeItems = Math.floor(item.cartQuantity / 2);
-              totalOfferDiscount += freeItems * item.sellingPrice;
+              totalOfferDiscount += freeItems * getItemPrice(item);
             }
           });
         }
@@ -295,7 +295,10 @@ export default function POS() {
         });
 
         // 5. Create COGS Journal Entry
-        const totalCost = items.reduce((acc, item) => acc + (item.costPriceAtTimeOfSale * item.cartQuantity), 0);
+        const totalCost = items.reduce((acc, item) => {
+          const factor = item.selectedUnit === 'box' ? (item.conversionFactor || 1) : 1;
+          return acc + (item.costPriceAtTimeOfSale * factor * item.cartQuantity);
+        }, 0);
         const cogsEntry: JournalEntry = {
           date: now,
           description: `تكلفة مبيعات فاتورة رقم ${receiptNumber}`,
@@ -314,7 +317,9 @@ export default function POS() {
         });
 
         for (const item of items) {
-          const itemTotal = item.sellingPrice * item.cartQuantity;
+          const factor = item.selectedUnit === 'box' ? (item.conversionFactor || 1) : 1;
+          const unitPrice = item.sellingPrice * factor;
+          const itemTotal = unitPrice * item.cartQuantity;
           const itemDiscount = item.discountType === 'percentage' 
             ? itemTotal * (item.discount / 100) 
             : item.discount;
@@ -326,8 +331,8 @@ export default function POS() {
             productId: item.id!,
             productName: item.name,
             quantity: item.cartQuantity,
-            unitPrice: item.sellingPrice,
-            costPriceAtTimeOfSale: item.costPriceAtTimeOfSale, // Use the correct field
+            unitPrice: unitPrice,
+            costPriceAtTimeOfSale: item.costPriceAtTimeOfSale * factor, // Use the correct field
             subTotal: itemTotal,
             taxAmount: taxAmount,
             total: afterDiscount + taxAmount,
@@ -341,7 +346,7 @@ export default function POS() {
           const product = await db.products.get(item.id!);
           if (product) {
             await db.products.update(item.id!, {
-              stockQuantity: product.stockQuantity - item.cartQuantity,
+              stockQuantity: product.stockQuantity - (item.cartQuantity * factor),
               updatedAt: now,
               syncStatus: 'pending'
             });
@@ -499,6 +504,9 @@ export default function POS() {
                 </div>
                 <h3 className="font-bold text-gray-800 text-sm mb-1 line-clamp-2">{product.name}</h3>
                 <p className="text-indigo-600 font-black mt-auto">{product.sellingPrice.toFixed(2)} {storeSettings.currency}</p>
+                {product.priceInUSD && (
+                  <p className="text-xs text-gray-500 font-medium">${product.priceInUSD.toFixed(2)}</p>
+                )}
                 <p className="text-[10px] text-gray-400 mt-1">{product.barcode}</p>
               </button>
             ))}
@@ -578,11 +586,21 @@ export default function POS() {
                 <div key={item.cartItemId} className="flex flex-col p-3 bg-white border border-gray-100 rounded-xl shadow-sm hover:border-indigo-100 transition-colors">
                   <div className="flex justify-between items-start mb-2">
                     <h4 className="font-bold text-gray-800 text-sm">{item.name}</h4>
-                    <span className="font-bold text-gray-900">{(item.sellingPrice * item.cartQuantity).toFixed(2)}</span>
+                    <span className="font-bold text-gray-900">{(getItemPrice(item) * item.cartQuantity).toFixed(2)}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <div className="flex flex-col">
-                      <p className="text-xs text-gray-500">{item.sellingPrice.toFixed(2)} {storeSettings.currency} / للوحدة</p>
+                    <div className="flex flex-col gap-1">
+                      <p className="text-xs text-gray-500">{getItemPrice(item).toFixed(2)} {storeSettings.currency} / للوحدة</p>
+                      {item.unit === 'box' && (
+                        <select
+                          value={item.selectedUnit}
+                          onChange={(e) => updateItemUnit(item.cartItemId, e.target.value as 'piece' | 'box')}
+                          className="text-xs border border-gray-200 rounded p-1 bg-gray-50 text-gray-700 outline-none focus:border-indigo-500"
+                        >
+                          <option value="piece">حبة</option>
+                          <option value="box">صندوق ({item.conversionFactor} حبة)</option>
+                        </select>
+                      )}
                       {item.discount > 0 && (
                         <p className="text-[10px] text-rose-500 font-bold">
                           خصم: {item.discountType === 'percentage' ? `${item.discount}%` : `${item.discount} ${storeSettings.currency}`}

@@ -5,12 +5,17 @@ import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { PrismaClient } from "@prisma/client";
+import * as Prisma from "@prisma/client";
+import pg from "pg";
+import { PrismaPg } from "@prisma/adapter-pg";
+
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+// @ts-ignore
+const adapter = new PrismaPg(pool);
+const prisma = new Prisma.PrismaClient({ adapter });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-const prisma = new PrismaClient();
 
 async function startServer() {
   const app = express();

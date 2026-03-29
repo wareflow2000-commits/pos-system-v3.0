@@ -69,7 +69,7 @@ export const syncService = {
       'categories', 'products', 'customers', 'suppliers', 
       'employees', 'expenses', 'shifts', 'orders', 'orderItems',
       'purchases', 'purchaseItems', 'attendance', 'branches', 'payroll', 'offers',
-      'loyaltyTransactions', 'settings', 'auditLogs', 'stocktakingSessions', 'stocktakingEntries'
+      'loyaltyTransactions', 'settings', 'auditLogs', 'stocktakingSessions', 'stocktakingEntries', 'inventoryBatches'
     ];
 
     for (const table of tables) {
@@ -183,6 +183,13 @@ export const syncService = {
           case 'stocktakingEntries':
             await apiService.createStocktakingEntry(record);
             break;
+          case 'inventoryBatches':
+            if (record.id && record.id > 1000000) {
+              await apiService.createInventoryBatch(record);
+            } else {
+              await apiService.updateInventoryBatch(record.id, record);
+            }
+            break;
           // Add other cases as needed
         }
 
@@ -218,6 +225,7 @@ export const syncService = {
         { table: db.auditLogs, api: () => apiService.getAuditLogs() },
         { table: db.stocktakingSessions, api: () => apiService.getStocktakingSessions() },
         { table: db.stocktakingEntries, api: () => apiService.getStocktakingEntries() },
+        { table: db.inventoryBatches, api: () => apiService.getInventoryBatches() },
       ];
 
       for (const task of pullTasks) {

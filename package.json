@@ -5,13 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build",
+    "build": "prisma generate && vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
+    "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^7.5.0",
     "@supabase/supabase-js": "^2.99.1",
     "@tailwindcss/vite": "^4.1.14",

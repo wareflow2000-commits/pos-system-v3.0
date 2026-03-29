@@ -21,18 +21,30 @@ export interface Product {
   barcode: string;
   name: string;
   categoryId: number;
-  costPrice: number;
+  costPrice: number; // متوسط التكلفة الحالي
   sellingPrice: number;
-  stockQuantity: number;
+  costInUSD?: number; // التكلفة بالدولار
+  priceInUSD?: number; // سعر البيع بالدولار
+  stockQuantity: number; // إجمالي القطع
   minStockLevel?: number;
-  unit?: string;
-  vatRate: number; // e.g., 15 for 15%
+  unit: 'piece' | 'box'; // الوحدة الأساسية
+  conversionFactor: number; // عدد القطع في الصندوق (إذا كان box)
+  vatRate: number;
   imageUrl?: string;
-  branchId?: number; // Added for multi-branch
-  expiryDate?: string; // For pharmacies/food
-  batchNumber?: string; // For pharmacies
+  branchId?: number;
+  expiryDate?: string;
+  batchNumber?: string;
   syncStatus: 'synced' | 'pending' | 'error';
   updatedAt: string;
+}
+
+export interface InventoryBatch {
+  id?: number;
+  productId: number;
+  quantity: number; // الكمية المتبقية من هذه الدفعة
+  costPrice: number; // تكلفة هذه الدفعة
+  purchaseDate: string;
+  syncStatus: 'synced' | 'pending' | 'error';
 }
 
 export interface Category {
@@ -310,6 +322,7 @@ export class POSDatabase extends Dexie {
   transactions!: Table<Transaction, number>;
   stocktakingSessions!: Table<StocktakingSession, string>;
   stocktakingEntries!: Table<StocktakingEntry, number>;
+  inventoryBatches!: Table<InventoryBatch, number>;
 
   constructor() {
     super('RetailPOSDB');
@@ -471,7 +484,7 @@ export class POSDatabase extends Dexie {
       auditLogs: '++id, date, type, userName'
     });
 
-    this.version(16).stores({
+    this.version(17).stores({
       products: '++id, barcode, categoryId, name, branchId, syncStatus',
       categories: '++id, name, branchId, syncStatus',
       orders: 'id, receiptNumber, createdAt, status, branchId, syncStatus, customerId, createdBy',
@@ -493,7 +506,8 @@ export class POSDatabase extends Dexie {
       journalEntries: '++id, date, referenceId, referenceType',
       transactions: '++id, orderId, purchaseId, journalEntryId',
       stocktakingSessions: 'id, status, createdAt, branchId, syncStatus',
-      stocktakingEntries: '++id, sessionId, productId, barcode, syncStatus'
+      stocktakingEntries: '++id, sessionId, productId, barcode, syncStatus',
+      inventoryBatches: '++id, productId, syncStatus'
     });
   }
 }
@@ -509,11 +523,11 @@ export async function seedDatabase() {
     const catId3 = await db.categories.add({ name: 'إلكترونيات', color: 'bg-gray-700', syncStatus: 'pending' });
 
     await db.products.bulkAdd([
-      { barcode: '10001', name: 'مياه معدنية', categoryId: catId1, costPrice: 0.5, sellingPrice: 1.0, stockQuantity: 100, vatRate: 15, syncStatus: 'pending', updatedAt: new Date().toISOString() },
-      { barcode: '10002', name: 'عصير برتقال', categoryId: catId1, costPrice: 1.5, sellingPrice: 3.0, stockQuantity: 50, vatRate: 15, syncStatus: 'pending', updatedAt: new Date().toISOString() },
-      { barcode: '20001', name: 'شيبس بطاطس', categoryId: catId2, costPrice: 2.0, sellingPrice: 3.5, stockQuantity: 80, vatRate: 15, syncStatus: 'pending', updatedAt: new Date().toISOString() },
-      { barcode: '20002', name: 'بسكويت شوكولاتة', categoryId: catId2, costPrice: 1.0, sellingPrice: 2.0, stockQuantity: 120, vatRate: 15, syncStatus: 'pending', updatedAt: new Date().toISOString() },
-      { barcode: '30001', name: 'شاحن هاتف', categoryId: catId3, costPrice: 15.0, sellingPrice: 35.0, stockQuantity: 20, vatRate: 15, syncStatus: 'pending', updatedAt: new Date().toISOString() },
+      { barcode: '10001', name: 'مياه معدنية', categoryId: catId1, costPrice: 0.5, sellingPrice: 1.0, stockQuantity: 100, unit: 'piece', conversionFactor: 1, vatRate: 15, syncStatus: 'pending', updatedAt: new Date().toISOString() },
+      { barcode: '10002', name: 'عصير برتقال', categoryId: catId1, costPrice: 1.5, sellingPrice: 3.0, stockQuantity: 50, unit: 'piece', conversionFactor: 1, vatRate: 15, syncStatus: 'pending', updatedAt: new Date().toISOString() },
+      { barcode: '20001', name: 'شيبس بطاطس', categoryId: catId2, costPrice: 2.0, sellingPrice: 3.5, stockQuantity: 80, unit: 'piece', conversionFactor: 1, vatRate: 15, syncStatus: 'pending', updatedAt: new Date().toISOString() },
+      { barcode: '20002', name: 'بسكويت شوكولاتة', categoryId: catId2, costPrice: 1.0, sellingPrice: 2.0, stockQuantity: 120, unit: 'piece', conversionFactor: 1, vatRate: 15, syncStatus: 'pending', updatedAt: new Date().toISOString() },
+      { barcode: '30001', name: 'شاحن هاتف', categoryId: catId3, costPrice: 15.0, sellingPrice: 35.0, stockQuantity: 20, unit: 'piece', conversionFactor: 1, vatRate: 15, syncStatus: 'pending', updatedAt: new Date().toISOString() },
     ]);
   }
 }
