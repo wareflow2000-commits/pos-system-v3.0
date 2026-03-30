@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { io, Socket } from 'socket.io-client';
+import { syncService } from './services/syncService';
 import Layout from './components/Layout';
 import POS from './pages/POS';
 import Dashboard from './pages/Dashboard';
@@ -35,6 +37,7 @@ function AppContent() {
   const [isLoading, setIsLoading] = useState(true);
   const { user, isLoading: isAuthLoading } = useAuth();
   const settings = useSettings();
+  const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
     if (settings) {
@@ -67,6 +70,34 @@ function AppContent() {
     settings.borderRadius, 
     settings.fontFamily
   ]);
+
+  useEffect(() => {
+    if (deviceRole === 'client') {
+      const initSocket = async () => {
+        const urlSetting = await db.settings.where('key').equals('serverUrl').first();
+        const serverUrl = urlSetting ? urlSetting.value : window.location.origin;
+        
+        const newSocket = io(serverUrl);
+        
+        newSocket.on('connect', () => {
+          console.log('Connected to server');
+        });
+        
+        newSocket.on('data-updated', (data) => {
+          console.log('Data updated:', data);
+          syncService.pullAll();
+        });
+        
+        setSocket(newSocket);
+      };
+      
+      initSocket();
+      
+      return () => {
+        if (socket) socket.disconnect();
+      };
+    }
+  }, [deviceRole]);
 
   useEffect(() => {
     const fetchInitialSetup = async () => {

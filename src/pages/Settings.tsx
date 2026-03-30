@@ -29,7 +29,8 @@ import {
   Link as LinkIcon,
   Server,
   ScanLine,
-  Printer
+  Printer,
+  MonitorSmartphone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db } from '../db/db';
@@ -917,6 +918,28 @@ const Settings: React.FC = () => {
                     </div>
                     
                     <div className="space-y-8">
+                      {/* Device Role Selection */}
+                      <div className="space-y-4 p-8 bg-gray-50 rounded-[40px] border border-gray-100">
+                        <div className="flex items-center gap-3 mb-2">
+                          <MonitorSmartphone className="w-6 h-6 text-gray-400" />
+                          <h3 className="text-lg font-bold text-gray-800">دور الجهاز (Device Role)</h3>
+                        </div>
+                        <div className="flex gap-4">
+                          <button
+                            onClick={() => setSettings({ ...settings, deviceRole: 'server' })}
+                            className={`px-6 py-3 rounded-xl font-bold transition-all ${settings.deviceRole === 'server' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                          >
+                            سيرفر رئيسي
+                          </button>
+                          <button
+                            onClick={() => setSettings({ ...settings, deviceRole: 'client' })}
+                            className={`px-6 py-3 rounded-xl font-bold transition-all ${settings.deviceRole === 'client' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                          >
+                            جهاز فرعي (نقطة بيع)
+                          </button>
+                        </div>
+                      </div>
+
                       {settings.deviceRole !== 'client' && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <button

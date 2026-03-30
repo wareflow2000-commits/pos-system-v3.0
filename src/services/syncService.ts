@@ -21,13 +21,13 @@ export const syncService = {
   },
 
   async syncAll() {
-    const isOnlineSetting = await db.settings.where('key').equals('isOnlineMode').first();
-    const isOnlineMode = isOnlineSetting ? isOnlineSetting.value === 'true' : false;
+    const syncModeSetting = await db.settings.where('key').equals('syncMode').first();
+    const syncMode = syncModeSetting ? syncModeSetting.value : 'local';
     const enableCloudSyncSetting = await db.settings.where('key').equals('enableCloudSync').first();
     const enableCloudSync = enableCloudSyncSetting ? enableCloudSyncSetting.value === 'true' : false;
 
-    if (!isOnlineMode && !enableCloudSync) {
-      console.log('Sync skipped: Offline mode enabled');
+    if (syncMode === 'local' && !enableCloudSync) {
+      console.log('Sync skipped: Local-only mode enabled');
       return false;
     }
 
@@ -38,13 +38,16 @@ export const syncService = {
     useSyncStore.getState().setSyncing(true);
 
     try {
-      // Standard server sync (if online mode is enabled)
-      if (isOnlineMode) {
-        // Push local changes to server
+      // Sync with local server
+      if (syncMode === 'local' || (syncMode === 'cloud' && enableCloudSync)) {
         await this.pushAll();
-        
-        // Pull changes from server to local
         await this.pullAll();
+      }
+
+      // Sync with cloud (Supabase) if enabled
+      if (enableCloudSync) {
+        // TODO: Implement Supabase sync logic here
+        console.log('Cloud sync (Supabase) triggered');
       }
 
       useSyncStore.getState().setLastSynced(new Date());
@@ -189,9 +192,13 @@ export const syncService = {
 
         // Mark as synced locally
         await (db as any)[tableName].update(record.id, { syncStatus: 'synced' });
-      } catch (err) {
+      } catch (err: any) {
         console.error(`Failed to push ${tableName} record:`, record, err);
-        await (db as any)[tableName].update(record.id, { syncStatus: 'error' });
+        if (err.response && err.response.status === 409) {
+          await (db as any)[tableName].update(record.id, { syncStatus: 'conflict' });
+        } else {
+          await (db as any)[tableName].update(record.id, { syncStatus: 'error' });
+        }
       }
     }
   },

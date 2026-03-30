@@ -1,5 +1,7 @@
 import { runMigrations } from "./migrate.js";
 import express from "express";
+import http from "http";
+import { Server } from "socket.io";
 import cors from "cors";
 import path from "path";
 import fs from 'fs';
@@ -22,6 +24,16 @@ async function startServer() {
   await runMigrations();
 
   const app = express();
+  const httpServer = http.createServer(app);
+  const io = new Server(httpServer, {
+    cors: {
+      origin: "*",
+      methods: ["GET", "POST", "PUT", "DELETE"]
+    }
+  });
+
+  app.set('io', io);
+
   const PORT = 3000;
 
   // Database connection initialized in initBackgroundServices
@@ -150,6 +162,10 @@ async function startServer() {
             }
 
             if (action && data) {
+              // Emit update via socket.io
+              const io = req.app.get('io');
+              io.emit('data-updated', { resource, action, id: idFromPath, data });
+
               // Handle arrays (e.g., bulk inserts)
               const items = Array.isArray(data) ? data : [data];
               
@@ -401,6 +417,11 @@ async function startServer() {
         // 3. Update Products Stock
         if (items && items.length > 0) {
           for (const item of items) {
+            // Check stock
+            const [product] = await tx.select().from(products).where(eq(products.id, item.productId));
+            if (!product || product.stockQuantity < item.quantity) {
+              throw new Error(`Insufficient stock for product ${item.productId}`);
+            }
             await tx.update(products)
               .set({ 
                 stockQuantity: sql`${products.stockQuantity} - ${item.quantity}`,
@@ -446,7 +467,12 @@ async function startServer() {
       res.status(201).json({ message: "Checkout successful" });
     } catch (error) {
       console.error("Checkout transaction failed:", error);
-      res.status(500).json({ error: "Checkout failed" });
+      // If it's a stock error, return 409
+      if (error instanceof Error && error.message.includes('Insufficient stock')) {
+        res.status(409).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: "Checkout failed" });
+      }
     }
   });
 
@@ -931,7 +957,7 @@ async function startServer() {
   });
 
   // 1. تشغيل السيرفر فوراً
-  app.listen(PORT, "0.0.0.0", () => {
+  httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
     // تهيئة قاعدة البيانات والمزامنة في الخلفية (بدون انتظار)
     initBackgroundServices().catch(console.error);
