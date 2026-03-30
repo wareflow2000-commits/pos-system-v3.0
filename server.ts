@@ -1,3 +1,4 @@
+import { runMigrations } from "./migrate.js";
 import express from "express";
 import cors from "cors";
 import path from "path";
@@ -17,6 +18,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function startServer() {
+  // Run migrations first
+  await runMigrations();
+
   const app = express();
   const PORT = 3000;
 
