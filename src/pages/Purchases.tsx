@@ -16,6 +16,11 @@ import { useAuth } from '../context/AuthContext';
 export default function Purchases() {
   const storeSettings = useSettings();
   const { user } = useAuth();
+  
+  const hasPermission = (permission: string) => {
+    return user?.role === 'admin' || user?.permissions?.includes(permission);
+  };
+  
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -33,6 +38,7 @@ export default function Purchases() {
   const [cart, setCart] = useState<{product: Product, quantity: number, costPrice: number}[]>([]);
   const [paidAmount, setPaidAmount] = useState<string>('0');
   const [purchaseDate, setPurchaseDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
 
   const filteredProducts = useMemo(() => {
     if (!searchQuery) return products;
@@ -81,107 +87,173 @@ export default function Purchases() {
     }
 
     try {
-      const purchaseId = uuidv4();
       const now = new Date().toISOString();
 
-      await db.transaction('rw', [db.purchases, db.purchaseItems, db.products, db.suppliers, db.journalEntries, db.transactions], async () => {
-        // 1. Create Purchase
-        await db.purchases.add({
-          id: purchaseId as any,
-          supplierId: selectedSupplier.id!,
-          supplierName: selectedSupplier.name,
-          totalAmount,
-          paidAmount: parseFloat(paidAmount || '0'),
-          paymentStatus: remainingAmount <= 0 ? 'paid' : (parseFloat(paidAmount || '0') > 0 ? 'partial' : 'unpaid'),
-          date: new Date(purchaseDate).toISOString(),
-          createdAt: now,
-          syncStatus: 'pending'
-        });
-
-        // 2. Create Purchase Items
-        const purchaseItems = cart.map(item => ({
-          purchaseId: purchaseId as any,
-          productId: item.product.id!,
-          productName: item.product.name,
-          quantity: item.quantity,
-          costPrice: item.costPrice,
-          total: item.quantity * item.costPrice,
-          syncStatus: 'pending'
-        }));
-        await db.purchaseItems.bulkAdd(purchaseItems as any);
-
-        // 3. Update Product Stock and Cost Price
-        for (const item of cart) {
-          await db.products.update(item.product.id!, {
-            stockQuantity: item.product.stockQuantity + item.quantity,
-            costPrice: item.costPrice,
-            updatedAt: now,
+      await db.transaction('rw', [db.purchases, db.purchaseItems, db.products, db.suppliers, db.journalEntries, db.transactions, db.auditLogs], async () => {
+        if (editingPurchase) {
+          // Revert old purchase stock
+          const oldItems = await db.purchaseItems.where('purchaseId').equals(editingPurchase.id!).toArray();
+          for (const item of oldItems) {
+            const product = await db.products.get(item.productId);
+            if (product) {
+              await db.products.update(item.productId, {
+                stockQuantity: product.stockQuantity - item.quantity,
+                updatedAt: now,
+                syncStatus: 'pending'
+              });
+            }
+          }
+          // Delete old items
+          await db.purchaseItems.where('purchaseId').equals(editingPurchase.id!).delete();
+          
+          // Update Purchase
+          await db.purchases.update(editingPurchase.id!, {
+            supplierId: selectedSupplier.id!,
+            supplierName: selectedSupplier.name,
+            totalAmount,
+            paidAmount: parseFloat(paidAmount || '0'),
+            paymentStatus: remainingAmount <= 0 ? 'paid' : (parseFloat(paidAmount || '0') > 0 ? 'partial' : 'unpaid'),
+            date: new Date(purchaseDate).toISOString(),
             syncStatus: 'pending'
           });
-        }
 
-        // 4. Create Journal Entries
-        const journalEntry: JournalEntry = {
-          date: now,
-          description: `مشتريات من المورد: ${selectedSupplier.name}`,
-          debitAccount: 'المخزون',
-          creditAccount: 'الموردون',
-          amount: totalAmount,
-          referenceId: purchaseId,
-          referenceType: 'purchase',
-          syncStatus: 'pending'
-        };
-        const journalEntryId = await db.journalEntries.add(journalEntry);
-        await db.transactions.add({
-          purchaseId: purchaseId,
-          journalEntryId: journalEntryId as number,
-          syncStatus: 'pending'
-        });
+          // Create new items
+          for (const item of cart) {
+            await db.purchaseItems.add({
+              purchaseId: editingPurchase.id!,
+              productId: item.product.id!,
+              productName: item.product.name,
+              quantity: item.quantity,
+              costPrice: item.costPrice,
+              total: item.quantity * item.costPrice,
+              syncStatus: 'pending'
+            });
 
-        // 5. Create Payment Journal Entry if paid
-        const paidAmountNum = parseFloat(paidAmount || '0');
-        if (paidAmountNum > 0) {
-          const paymentEntry: JournalEntry = {
+            const product = await db.products.get(item.product.id!);
+            if (product) {
+              await db.products.update(item.product.id!, {
+                stockQuantity: product.stockQuantity + item.quantity,
+                costPrice: item.costPrice,
+                updatedAt: now,
+                syncStatus: 'pending'
+              });
+            }
+          }
+          
+          await logAction(
+            user?.name || 'مستخدم غير معروف',
+            'تعديل فاتورة مشتريات',
+            'purchase',
+            `تعديل فاتورة مشتريات من المورد: ${selectedSupplier.name}`,
+            cart.reduce((acc, item) => acc + item.quantity, 0),
+            totalAmount,
+            undefined,
+            user?.branchId
+          );
+        } else {
+          const purchaseId = uuidv4();
+          // 1. Create Purchase
+          await db.purchases.add({
+            id: purchaseId as any,
+            supplierId: selectedSupplier.id!,
+            supplierName: selectedSupplier.name,
+            totalAmount,
+            paidAmount: parseFloat(paidAmount || '0'),
+            paymentStatus: remainingAmount <= 0 ? 'paid' : (parseFloat(paidAmount || '0') > 0 ? 'partial' : 'unpaid'),
+            date: new Date(purchaseDate).toISOString(),
+            createdAt: now,
+            syncStatus: 'pending'
+          });
+
+          // 2. Create Purchase Items
+          const purchaseItems = cart.map(item => ({
+            purchaseId: purchaseId as any,
+            productId: item.product.id!,
+            productName: item.product.name,
+            quantity: item.quantity,
+            costPrice: item.costPrice,
+            total: item.quantity * item.costPrice,
+            syncStatus: 'pending'
+          }));
+          await db.purchaseItems.bulkAdd(purchaseItems as any);
+
+          // 3. Update Product Stock and Cost Price
+          for (const item of cart) {
+            const product = await db.products.get(item.product.id!);
+            if (product) {
+              await db.products.update(item.product.id!, {
+                stockQuantity: product.stockQuantity + item.quantity,
+                costPrice: item.costPrice,
+                updatedAt: now,
+                syncStatus: 'pending'
+              });
+            }
+          }
+
+          // 4. Create Journal Entries
+          const journalEntry: JournalEntry = {
             date: now,
-            description: `سداد للمورد: ${selectedSupplier.name}`,
-            debitAccount: 'الموردون',
-            creditAccount: 'الصندوق',
-            amount: paidAmountNum,
+            description: `مشتريات من المورد: ${selectedSupplier.name}`,
+            debitAccount: 'المخزون',
+            creditAccount: 'الموردون',
+            amount: totalAmount,
             referenceId: purchaseId,
-            referenceType: 'payment',
+            referenceType: 'purchase',
             syncStatus: 'pending'
           };
-          const paymentEntryId = await db.journalEntries.add(paymentEntry);
+          const journalEntryId = await db.journalEntries.add(journalEntry);
           await db.transactions.add({
             purchaseId: purchaseId,
-            journalEntryId: paymentEntryId as number,
+            journalEntryId: journalEntryId as number,
             syncStatus: 'pending'
           });
-        }
 
-        // 6. Update Supplier Balance if there's remaining amount
-        if (remainingAmount > 0) {
-          await db.suppliers.update(selectedSupplier.id!, {
-            balance: selectedSupplier.balance + remainingAmount,
-            updatedAt: now,
-            syncStatus: 'pending'
-          });
+          // 5. Create Payment Journal Entry if paid
+          const paidAmountNum = parseFloat(paidAmount || '0');
+          if (paidAmountNum > 0) {
+            const paymentEntry: JournalEntry = {
+              date: now,
+              description: `سداد للمورد: ${selectedSupplier.name}`,
+              debitAccount: 'الموردون',
+              creditAccount: 'الصندوق',
+              amount: paidAmountNum,
+              referenceId: purchaseId,
+              referenceType: 'payment',
+              syncStatus: 'pending'
+            };
+            const paymentEntryId = await db.journalEntries.add(paymentEntry);
+            await db.transactions.add({
+              purchaseId: purchaseId,
+              journalEntryId: paymentEntryId as number,
+              syncStatus: 'pending'
+            });
+          }
+
+          // 6. Update Supplier Balance if there's remaining amount
+          if (remainingAmount > 0) {
+            await db.suppliers.update(selectedSupplier.id!, {
+              balance: selectedSupplier.balance + remainingAmount,
+              updatedAt: now,
+              syncStatus: 'pending'
+            });
+          }
+
+          await logAction(
+            user?.name || 'مستخدم غير معروف',
+            'إضافة فاتورة مشتريات',
+            'purchase',
+            `فاتورة مشتريات من المورد: ${selectedSupplier.name}`,
+            cart.reduce((acc, item) => acc + item.quantity, 0),
+            totalAmount,
+            undefined,
+            user?.branchId
+          );
         }
       });
 
-      await logAction(
-        user?.name || 'مستخدم غير معروف',
-        'إضافة فاتورة مشتريات',
-        'purchase',
-        `فاتورة مشتريات من المورد: ${selectedSupplier.name}`,
-        cart.reduce((acc, item) => acc + item.quantity, 0),
-        totalAmount,
-        undefined,
-        user?.branchId
-      );
-
-      toast.success('تم تسجيل المشتريات وتحديث المخزون');
+      toast.success(editingPurchase ? 'تم تحديث الفاتورة بنجاح' : 'تم تسجيل المشتريات وتحديث المخزون');
       setIsAddingNew(false);
+      setEditingPurchase(null);
       setCart([]);
       setSelectedSupplier(null);
       setPaidAmount('0');
@@ -189,6 +261,64 @@ export default function Purchases() {
       console.error('Error saving purchase:', error);
       toast.error('حدث خطأ أثناء حفظ المشتريات');
     }
+  };
+
+  const handleDeletePurchase = async (purchase: Purchase) => {
+    if (!confirm('هل أنت متأكد من حذف هذه الفاتورة؟ سيتم خصم الكميات من المخزون.')) return;
+
+    try {
+      await db.transaction('rw', [db.purchases, db.purchaseItems, db.products, db.suppliers, db.journalEntries, db.transactions, db.auditLogs], async () => {
+        const items = await db.purchaseItems.where('purchaseId').equals(purchase.id!).toArray();
+        for (const item of items) {
+          const product = await db.products.get(item.productId);
+          if (product) {
+            await db.products.update(item.productId, {
+              stockQuantity: product.stockQuantity - item.quantity,
+              updatedAt: new Date().toISOString(),
+              syncStatus: 'pending'
+            });
+          }
+        }
+        await db.purchaseItems.where('purchaseId').equals(purchase.id!).delete();
+        await db.purchases.delete(purchase.id!);
+        
+        await logAction(
+          user?.name || 'مستخدم غير معروف',
+          'حذف فاتورة مشتريات',
+          'purchase',
+          `حذف فاتورة مشتريات من المورد: ${purchase.supplierName}`,
+          0,
+          purchase.totalAmount,
+          undefined,
+          user?.branchId
+        );
+      });
+      toast.success('تم حذف الفاتورة بنجاح');
+    } catch (error) {
+      console.error(error);
+      toast.error('حدث خطأ أثناء حذف الفاتورة');
+    }
+  };
+
+  const handleEditPurchase = async (purchase: Purchase) => {
+    const items = await db.purchaseItems.where('purchaseId').equals(purchase.id!).toArray();
+    const supplier = suppliers.find(s => s.id === purchase.supplierId);
+    
+    setEditingPurchase(purchase);
+    setSelectedSupplier(supplier || null);
+    setPurchaseDate(format(new Date(purchase.date), 'yyyy-MM-dd'));
+    setPaidAmount(purchase.paidAmount.toString());
+    
+    const cartItems = items.map(item => {
+      const product = products.find(p => p.id === item.productId);
+      return {
+        product: product || { id: item.productId, name: item.productName } as any,
+        quantity: item.quantity,
+        costPrice: item.costPrice
+      };
+    });
+    setCart(cartItems);
+    setIsAddingNew(true);
   };
 
   if (isAddingNew) {
@@ -362,13 +492,15 @@ export default function Purchases() {
           </h2>
           <p className="text-gray-500 text-sm mt-1">إدارة فواتير المشتريات وتحديث كميات المخزون</p>
         </div>
-        <button 
-          onClick={() => setIsAddingNew(true)}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-md"
-        >
-          <Plus className="w-5 h-5" />
-          فاتورة مشتريات جديدة
-        </button>
+        {hasPermission('add_purchase') && (
+          <button 
+            onClick={() => setIsAddingNew(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-md"
+          >
+            <Plus className="w-5 h-5" />
+            فاتورة مشتريات جديدة
+          </button>
+        )}
       </div>
 
       {/* Purchases List */}
@@ -391,6 +523,7 @@ export default function Purchases() {
                 <th className="px-6 py-4">المدفوع</th>
                 <th className="px-6 py-4">المتبقي</th>
                 <th className="px-6 py-4">الحالة</th>
+                <th className="px-6 py-4 text-center">الإجراءات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -412,6 +545,28 @@ export default function Purchases() {
                       {purchase.paymentStatus === 'paid' ? 'مدفوع' : 
                        purchase.paymentStatus === 'partial' ? 'مدفوع جزئياً' : 'غير مدفوع'}
                     </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center justify-center gap-2">
+                      {hasPermission('edit_purchase') && (
+                        <button 
+                          onClick={() => handleEditPurchase(purchase)}
+                          className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="تعديل"
+                        >
+                          <Plus className="w-4 h-4 rotate-45" />
+                        </button>
+                      )}
+                      {hasPermission('delete_purchase') && (
+                        <button 
+                          onClick={() => handleDeletePurchase(purchase)}
+                          className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                          title="حذف"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

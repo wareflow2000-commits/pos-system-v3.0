@@ -130,24 +130,25 @@ export default function Layout() {
   };
 
   const navItems = [
-    { to: '/', icon: LayoutGrid, label: 'الرئيسية', roles: ['admin', 'manager'], permissionId: 'can_view_dashboard' },
-    { to: '/pos', icon: ShoppingBag, label: 'نقطة البيع', roles: ['admin', 'manager', 'cashier'], permissionId: 'can_view_pos' },
-    { to: '/returns', icon: RotateCcw, label: 'المرتجعات', roles: ['admin', 'manager', 'cashier'], permissionId: 'can_view_returns' },
-    { to: '/inventory', icon: Package, label: 'المخزون', roles: ['admin', 'manager'], permissionId: 'can_view_inventory' },
-    { to: '/stocktaking', icon: RefreshCw, label: 'الجرد', roles: ['admin', 'manager'], permissionId: 'can_view_inventory' },
-    { to: '/purchases', icon: ShoppingCart, label: 'المشتريات', roles: ['admin', 'manager'], permissionId: 'can_view_purchases' },
-    { to: '/customers', icon: Users, label: 'العملاء', roles: ['admin', 'manager', 'cashier', 'sales_rep'], permissionId: 'can_view_customers' },
-    { to: '/suppliers', icon: Truck, label: 'الموردون', roles: ['admin', 'manager'], permissionId: 'can_view_suppliers' },
-    { to: '/employees', icon: UserCircle, label: 'الموظفون', roles: ['admin'], permissionId: 'can_manage_employees' },
-    { to: '/attendance', icon: UserCheck, label: 'الحضور', roles: ['admin', 'manager'], permissionId: 'can_view_attendance' },
-    { to: '/payroll', icon: DollarSign, label: 'الرواتب', roles: ['admin'], permissionId: 'can_view_payroll' },
-    { to: '/offers', icon: Tag, label: 'العروض', roles: ['admin', 'manager'], permissionId: 'can_view_offers' },
-    { to: '/branches', icon: Building2, label: 'الفروع', roles: ['admin'], permissionId: 'can_view_branches' },
-    { to: '/mobile-sales', icon: Smartphone, label: 'تطبيق المناديب', roles: ['admin', 'sales_rep'], permissionId: 'can_view_mobile_sales' },
-    { to: '/shifts', icon: Clock, label: 'الورديات', roles: ['admin', 'manager', 'cashier'], permissionId: 'can_view_shifts' },
-    { to: '/expenses', icon: Wallet, label: 'المصروفات', roles: ['admin', 'manager'], permissionId: 'can_view_expenses' },
-    { to: '/reports', icon: FileText, label: 'التقارير', roles: ['admin', 'manager'], permissionId: 'can_view_reports' },
-    { to: '/settings', icon: Settings, label: 'الإعدادات', roles: ['admin'], permissionId: 'can_manage_settings' },
+    { to: '/', icon: LayoutGrid, label: 'الرئيسية', permissionId: 'view_dashboard' },
+    { to: '/pos', icon: ShoppingBag, label: 'نقطة البيع', permissionId: 'view_pos' },
+    { to: '/returns', icon: RotateCcw, label: 'المرتجعات', permissionId: 'view_returns' },
+    { to: '/inventory', icon: Package, label: 'المخزون', permissionId: 'view_inventory' },
+    { to: '/stocktaking', icon: RefreshCw, label: 'الجرد', permissionId: 'view_stocktaking' },
+    { to: '/purchases', icon: ShoppingCart, label: 'المشتريات', permissionId: 'view_purchases' },
+    { to: '/customers', icon: Users, label: 'العملاء', permissionId: 'view_customers' },
+    { to: '/suppliers', icon: Truck, label: 'الموردون', permissionId: 'view_suppliers' },
+    { to: '/employees', icon: UserCircle, label: 'الموظفون', permissionId: 'view_employees' },
+    { to: '/attendance', icon: UserCheck, label: 'الحضور', permissionId: 'view_attendance' },
+    { to: '/payroll', icon: DollarSign, label: 'الرواتب', permissionId: 'view_payroll' },
+    { to: '/offers', icon: Tag, label: 'العروض', permissionId: 'view_offers' },
+    { to: '/branches', icon: Building2, label: 'الفروع', permissionId: 'view_branches' },
+    { to: '/mobile-sales', icon: Smartphone, label: 'تطبيق المناديب', permissionId: 'view_mobile_sales' },
+    { to: '/shifts', icon: Clock, label: 'الورديات', permissionId: 'view_shifts' },
+    { to: '/expenses', icon: Wallet, label: 'المصروفات', permissionId: 'view_expenses' },
+    { to: '/reports', icon: FileText, label: 'التقارير', permissionId: 'view_reports' },
+    { to: '/sync-status', icon: RefreshCw, label: 'المزامنة', permissionId: 'manage_settings' },
+    { to: '/settings', icon: Settings, label: 'الإعدادات', permissionId: 'manage_settings' },
   ];
 
   const filteredNavItems = navItems.filter(item => {
@@ -159,12 +160,7 @@ export default function Layout() {
     // Check if user has explicit permission
     const hasPermission = user.permissions?.includes(item.permissionId);
     
-    // Check if user's role has default access
-    const hasRole = item.roles.includes(user.role);
-    
-    if (!hasRole && !hasPermission) return false;
-    
-    return true;
+    return hasPermission;
   });
 
   const isMobileSalesPage = window.location.pathname === '/mobile-sales';

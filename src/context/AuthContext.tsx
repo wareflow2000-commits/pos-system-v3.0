@@ -18,64 +18,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<{ id: number; name: string; role: Role; deviceType: 'desktop' | 'mobile'; permissions?: string[]; branchId?: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Seed admin user if not exists
-  useEffect(() => {
-    const seedAdmin = async () => {
-      // Seed 'max'
-      const maxExists = await db.employees.where('username').equals('max').first();
-      if (!maxExists) {
-        const hashedPassword = bcrypt.hashSync('max', 10);
-        await db.employees.add({
-          name: 'Max Admin',
-          username: 'max',
-          password: hashedPassword,
-          pinCode: '0987',
-          role: 'admin',
-          phone: '0000000000',
-          salary: 0,
-          joinDate: new Date().toISOString().split('T')[0],
-          status: 'active',
-          deviceType: 'desktop',
-          permissions: ['can_view_dashboard', 'can_view_pos', 'can_view_returns', 'can_view_inventory', 'can_view_purchases', 'can_view_customers', 'can_view_suppliers', 'can_manage_employees', 'can_view_attendance', 'can_view_payroll', 'can_view_offers', 'can_view_branches', 'can_view_mobile_sales', 'can_view_shifts', 'can_view_expenses', 'can_view_reports', 'can_manage_settings'],
-          syncStatus: 'pending',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        });
-        console.log('Admin user "max" seeded successfully.');
-      } else if (!maxExists.password) {
-        const hashedPassword = bcrypt.hashSync('max', 10);
-        await db.employees.update(maxExists.id!, { password: hashedPassword });
-      }
-
-      // Seed 'admin'
-      const adminExists = await db.employees.where('username').equals('admin').first();
-      if (!adminExists) {
-        const hashedPassword = bcrypt.hashSync('admin', 10);
-        await db.employees.add({
-          name: 'Admin',
-          username: 'admin',
-          password: hashedPassword,
-          pinCode: '1234',
-          role: 'admin',
-          phone: '0000000000',
-          salary: 0,
-          joinDate: new Date().toISOString().split('T')[0],
-          status: 'active',
-          deviceType: 'desktop',
-          permissions: ['can_view_dashboard', 'can_view_pos', 'can_view_returns', 'can_view_inventory', 'can_view_purchases', 'can_view_customers', 'can_view_suppliers', 'can_manage_employees', 'can_view_attendance', 'can_view_payroll', 'can_view_offers', 'can_view_branches', 'can_view_mobile_sales', 'can_view_shifts', 'can_view_expenses', 'can_view_reports', 'can_manage_settings'],
-          syncStatus: 'pending',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        });
-        console.log('Admin user "admin" seeded successfully.');
-      } else if (!adminExists.password) {
-        const hashedPassword = bcrypt.hashSync('admin', 10);
-        await db.employees.update(adminExists.id!, { password: hashedPassword });
-      }
-    };
-    seedAdmin();
-  }, []);
-
   // Keep user data up to date with the database
   const dbUser = useLiveQuery(
     () => user?.id ? db.employees.get(user.id) : undefined,

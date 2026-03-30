@@ -22,6 +22,7 @@ import Onboarding, { BusinessType, DeviceRole } from './pages/Onboarding';
 import Login from './pages/Login';
 import Returns from './pages/Returns';
 import Stocktaking from './pages/Stocktaking';
+import SyncStatus from './pages/SyncStatus';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -154,7 +155,7 @@ function AppContent() {
         <Route path="/" element={<Layout />}>
           <Route index element={
             isMobileUser ? <Navigate to="/mobile-sales" replace /> : 
-            <ProtectedRoute allowedRoles={['admin', 'manager']} permissionId="can_view_dashboard">
+            <ProtectedRoute permissionId="view_dashboard">
               <Dashboard />
             </ProtectedRoute>
           } />
@@ -162,48 +163,49 @@ function AppContent() {
           {/* Redirect sales reps away from desktop-only pages if they try to access them directly */}
           <Route path="pos" element={
             isMobileUser && user.role !== 'admin' ? <Navigate to="/mobile-sales" replace /> :
-            <ProtectedRoute allowedRoles={['admin', 'manager', 'cashier']} permissionId="can_view_pos"><POS /></ProtectedRoute>
+            <ProtectedRoute permissionId="view_pos"><POS /></ProtectedRoute>
           } />
           <Route path="returns" element={
             isMobileUser && user.role !== 'admin' ? <Navigate to="/mobile-sales" replace /> :
-            <ProtectedRoute allowedRoles={['admin', 'manager', 'cashier']} permissionId="can_view_returns"><Returns /></ProtectedRoute>
+            <ProtectedRoute permissionId="view_returns"><Returns /></ProtectedRoute>
           } />
           <Route path="inventory" element={
             isMobileUser && user.role !== 'admin' ? <Navigate to="/mobile-sales" replace /> :
-            <ProtectedRoute allowedRoles={['admin', 'manager']} permissionId="can_view_inventory"><Inventory /></ProtectedRoute>
+            <ProtectedRoute permissionId="view_inventory"><Inventory /></ProtectedRoute>
           } />
           <Route path="stocktaking" element={
             isMobileUser && user.role !== 'admin' ? <Navigate to="/mobile-sales" replace /> :
-            <ProtectedRoute allowedRoles={['admin', 'manager']} permissionId="can_view_inventory"><Stocktaking /></ProtectedRoute>
+            <ProtectedRoute permissionId="view_stocktaking"><Stocktaking /></ProtectedRoute>
           } />
           <Route path="purchases" element={
             isMobileUser && user.role !== 'admin' ? <Navigate to="/mobile-sales" replace /> :
-            <ProtectedRoute allowedRoles={['admin', 'manager']} permissionId="can_view_purchases"><Purchases /></ProtectedRoute>
+            <ProtectedRoute permissionId="view_purchases"><Purchases /></ProtectedRoute>
           } />
-          <Route path="customers" element={<ProtectedRoute allowedRoles={['admin', 'manager', 'cashier', 'sales_rep']} permissionId="can_view_customers"><Customers /></ProtectedRoute>} />
+          <Route path="customers" element={<ProtectedRoute permissionId="view_customers"><Customers /></ProtectedRoute>} />
           <Route path="suppliers" element={
             isMobileUser && user.role !== 'admin' ? <Navigate to="/mobile-sales" replace /> :
-            <ProtectedRoute allowedRoles={['admin', 'manager']} permissionId="can_view_suppliers"><Suppliers /></ProtectedRoute>
+            <ProtectedRoute permissionId="view_suppliers"><Suppliers /></ProtectedRoute>
           } />
-          <Route path="employees" element={<ProtectedRoute allowedRoles={['admin']} permissionId="can_manage_employees"><Employees /></ProtectedRoute>} />
-          <Route path="attendance" element={<ProtectedRoute allowedRoles={['admin', 'manager']} permissionId="can_view_attendance"><Attendance /></ProtectedRoute>} />
-          <Route path="payroll" element={<ProtectedRoute allowedRoles={['admin']} permissionId="can_view_payroll"><Payroll /></ProtectedRoute>} />
-          <Route path="offers" element={<ProtectedRoute allowedRoles={['admin', 'manager']} permissionId="can_view_offers"><Offers /></ProtectedRoute>} />
-          <Route path="branches" element={<ProtectedRoute allowedRoles={['admin']} permissionId="can_view_branches"><Branches /></ProtectedRoute>} />
-          <Route path="mobile-sales" element={<ProtectedRoute allowedRoles={['admin', 'sales_rep']} permissionId="can_view_mobile_sales"><MobileSales /></ProtectedRoute>} />
+          <Route path="employees" element={<ProtectedRoute permissionId="view_employees"><Employees /></ProtectedRoute>} />
+          <Route path="attendance" element={<ProtectedRoute permissionId="view_attendance"><Attendance /></ProtectedRoute>} />
+          <Route path="payroll" element={<ProtectedRoute permissionId="view_payroll"><Payroll /></ProtectedRoute>} />
+          <Route path="offers" element={<ProtectedRoute permissionId="view_offers"><Offers /></ProtectedRoute>} />
+          <Route path="branches" element={<ProtectedRoute permissionId="view_branches"><Branches /></ProtectedRoute>} />
+          <Route path="mobile-sales" element={<ProtectedRoute permissionId="view_mobile_sales"><MobileSales /></ProtectedRoute>} />
           <Route path="shifts" element={
             isMobileUser && user.role !== 'admin' ? <Navigate to="/mobile-sales" replace /> :
-            <ProtectedRoute allowedRoles={['admin', 'manager', 'cashier']} permissionId="can_view_shifts"><Shifts /></ProtectedRoute>
+            <ProtectedRoute permissionId="view_shifts"><Shifts /></ProtectedRoute>
           } />
           <Route path="expenses" element={
             isMobileUser && user.role !== 'admin' ? <Navigate to="/mobile-sales" replace /> :
-            <ProtectedRoute allowedRoles={['admin', 'manager']} permissionId="can_view_expenses"><Expenses /></ProtectedRoute>
+            <ProtectedRoute permissionId="view_expenses"><Expenses /></ProtectedRoute>
           } />
           <Route path="reports" element={
             isMobileUser && user.role !== 'admin' ? <Navigate to="/mobile-sales" replace /> :
-            <ProtectedRoute allowedRoles={['admin', 'manager']} permissionId="can_view_reports"><Reports /></ProtectedRoute>
+            <ProtectedRoute permissionId="view_reports"><Reports /></ProtectedRoute>
           } />
-          <Route path="settings" element={<ProtectedRoute allowedRoles={['admin']} permissionId="can_manage_settings"><Settings /></ProtectedRoute>} />
+          <Route path="settings" element={<ProtectedRoute permissionId="manage_settings"><Settings /></ProtectedRoute>} />
+          <Route path="sync-status" element={<ProtectedRoute permissionId="manage_settings"><SyncStatus /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

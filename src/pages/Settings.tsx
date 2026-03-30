@@ -337,9 +337,24 @@ const Settings: React.FC = () => {
     }
   };
 
+  const handleImportSql = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      await apiService.importSql(file);
+      toast.success('تم استيراد قاعدة البيانات بنجاح. سيتم إعادة تشغيل النظام.');
+      setTimeout(() => window.location.reload(), 2000);
+    } catch (error) {
+      console.error('SQL Import error:', error);
+      toast.error('فشل استيراد قاعدة البيانات.');
+    }
+  };
+
   const handleClearData = async () => {
     if (window.confirm('هل أنت متأكد من مسح جميع البيانات؟ لا يمكن التراجع عن هذا الإجراء!')) {
       try {
+        // Clear local Dexie
         await db.transaction('rw', db.tables, async () => {
           for (const table of db.tables) {
             if (table.name !== 'settings') {
@@ -347,6 +362,14 @@ const Settings: React.FC = () => {
             }
           }
         });
+        
+        // Clear remote SQLite
+        try {
+          await apiService.clearData();
+        } catch (e) {
+          console.warn('Failed to clear remote data, but local data is cleared:', e);
+        }
+
         toast.success('تم مسح البيانات بنجاح');
         setTimeout(() => window.location.reload(), 1500);
       } catch (error) {
@@ -1095,7 +1118,17 @@ const Settings: React.FC = () => {
                         </label>
                       </div>
 
-                      <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-4 md:col-span-2">
+                      <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-4">
+                        <h3 className="font-bold text-gray-800">استيراد (SQL/DB)</h3>
+                        <p className="text-sm text-gray-500">استيراد قاعدة بيانات SQLite كاملة (.db).</p>
+                        <label className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors cursor-pointer">
+                          <Upload className="w-5 h-5" />
+                          استيراد ملف SQL
+                          <input type="file" accept=".db,.sql" className="hidden" onChange={handleImportSql} />
+                        </label>
+                      </div>
+
+                      <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-4">
                         <h3 className="font-bold text-rose-600">منطقة الخطر: مسح البيانات</h3>
                         <p className="text-sm text-gray-500">هذا الإجراء سيقوم بحذف جميع البيانات نهائياً. لا يمكن التراجع عن هذا الإجراء!</p>
                         <button 

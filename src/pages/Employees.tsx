@@ -6,8 +6,10 @@ import { db, Employee } from '../db/db';
 import { format } from 'date-fns';
 import { useSettings } from '../hooks/useSettings';
 import { PERMISSIONS } from '../constants';
+import { useAuth } from '../context/AuthContext';
 
 export default function Employees() {
+  const { user } = useAuth();
   const storeSettings = useSettings();
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -92,6 +94,7 @@ export default function Employees() {
     try {
       const employeeData: any = {
         name,
+        username,
         role,
         phone,
         salary: salaryNum,
@@ -104,14 +107,17 @@ export default function Employees() {
         syncStatus: 'pending'
       };
 
+      if (password) {
+        const bcrypt = await import('bcryptjs');
+        employeeData.password = bcrypt.default.hashSync(password, 10);
+      }
+
       if (editingEmployee && editingEmployee.id) {
         await db.employees.update(editingEmployee.id, employeeData);
         toast.success('تم تحديث بيانات الموظف بنجاح');
       } else {
         await db.employees.add({
           ...employeeData,
-          username,
-          password, // In a real app, this should be hashed on the server
           createdAt: now,
         });
         toast.success('تمت إضافة الموظف بنجاح');
@@ -124,6 +130,11 @@ export default function Employees() {
   };
 
   const handleDelete = async (id: number) => {
+    if (user?.id === id) {
+      toast.error('لا يمكنك حذف حسابك الحالي');
+      return;
+    }
+    
     if (confirm('هل أنت متأكد من حذف هذا الموظف؟')) {
       try {
         await db.employees.delete(id);
@@ -320,19 +331,19 @@ export default function Employees() {
                 <p className="text-xs text-gray-400 mt-1">يستخدم في حال تفعيل تسجيل الدخول عبر PIN</p>
               </div>
 
-              {!editingEmployee && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">كلمة المرور *</label>
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
-                    placeholder="أدخل كلمة المرور"
-                  />
-                </div>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  كلمة المرور {editingEmployee ? '(اتركه فارغاً إذا لم ترد تغييره)' : '*'}
+                </label>
+                <input
+                  type="password"
+                  required={!editingEmployee}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                  placeholder={editingEmployee ? 'أدخل كلمة المرور الجديدة' : 'أدخل كلمة المرور'}
+                />
+              </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">المسمى الوظيفي *</label>

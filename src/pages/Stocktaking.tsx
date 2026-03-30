@@ -92,6 +92,35 @@ export default function Stocktaking() {
     }
   };
 
+  const handleUpdateSessionStatus = async (id: string, status: 'open' | 'closed' | 'suspended' | 'approved') => {
+    try {
+      await db.stocktakingSessions.update(id, { status, syncStatus: 'pending' });
+      toast.success('تم تحديث حالة الجلسة بنجاح');
+      if (selectedSession?.id === id) {
+        setSelectedSession({ ...selectedSession, status });
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error('حدث خطأ أثناء تحديث حالة الجلسة');
+    }
+  };
+
+  const handleDeleteSession = async (id: string) => {
+    if (!confirm('هل أنت متأكد من حذف هذه الجلسة؟ سيتم حذف جميع البيانات المرتبطة بها.')) return;
+    try {
+      await db.transaction('rw', [db.stocktakingSessions, db.stocktakingEntries], async () => {
+        await db.stocktakingEntries.where('sessionId').equals(id).delete();
+        await db.stocktakingSessions.delete(id);
+      });
+      toast.success('تم حذف الجلسة بنجاح');
+      setView('sessions');
+      setSelectedSession(null);
+    } catch (error) {
+      console.error(error);
+      toast.error('حدث خطأ أثناء حذف الجلسة');
+    }
+  };
+
   const handleStartMobileSession = async () => {
     setIsProcessing(true);
     try {
@@ -229,7 +258,43 @@ export default function Stocktaking() {
                 <span>بتاريخ: {new Date(session.createdAt).toLocaleDateString('ar-SA')}</span>
               </div>
             </div>
-            <div className="mt-6 flex items-center justify-between text-indigo-600 font-bold text-sm group-hover:translate-x-[-4px] transition-transform">
+            <div className="mt-4 flex items-center gap-2 border-t pt-4">
+              <button 
+                onClick={(e) => { e.stopPropagation(); handleDeleteSession(session.id!); }}
+                className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                title="حذف"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+              {session.status === 'open' && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); handleUpdateSessionStatus(session.id!, 'suspended'); }}
+                  className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                  title="تعليق"
+                >
+                  <Clock className="w-4 h-4" />
+                </button>
+              )}
+              {session.status === 'suspended' && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); handleUpdateSessionStatus(session.id!, 'open'); }}
+                  className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                  title="استئناف"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              )}
+              {session.status !== 'closed' && session.status !== 'approved' && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); handleUpdateSessionStatus(session.id!, 'closed'); }}
+                  className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+                  title="إغلاق"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            <div className="mt-4 flex items-center justify-between text-indigo-600 font-bold text-sm group-hover:translate-x-[-4px] transition-transform">
               <span>عرض التفاصيل</span>
               <ChevronLeft className="w-4 h-4" />
             </div>

@@ -298,5 +298,33 @@ export const apiService = {
 
   async getBackup() {
     window.open(`${API_BASE}/backup`, '_blank');
+  },
+
+  async clearData() {
+    return axios.post(`${API_BASE}/settings/clearData`).then(r => r.data);
+  },
+
+  async importSql(file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return axios.post(`${API_BASE}/settings/importSql`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(r => r.data);
+  },
+
+  async getSyncQueue() {
+    return requestWithRetry(() => axios.get(`${API_BASE}/sync-queue`).then(r => r.data));
+  },
+
+  async deleteSyncQueueItem(id: string) {
+    return requestWithRetry(() => axios.delete(`${API_BASE}/sync-queue/${id}`).then(r => r.data));
+  },
+
+  async retrySyncQueueItem(id: string) {
+    return requestWithRetry(() => axios.post(`${API_BASE}/sync-queue/${id}/retry`).then(r => r.data));
+  },
+
+  async processSyncQueue() {
+    return requestWithRetry(() => axios.post(`${API_BASE}/sync-queue/process`).then(r => r.data));
   }
 };

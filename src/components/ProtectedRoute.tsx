@@ -3,11 +3,10 @@ import { useAuth, Role } from '../context/AuthContext';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  allowedRoles: Role[];
   permissionId?: string;
 }
 
-export default function ProtectedRoute({ children, allowedRoles, permissionId }: ProtectedRouteProps) {
+export default function ProtectedRoute({ children, permissionId }: ProtectedRouteProps) {
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
@@ -23,10 +22,9 @@ export default function ProtectedRoute({ children, allowedRoles, permissionId }:
     return <>{children}</>;
   }
 
-  const hasRole = allowedRoles.includes(user.role);
   const hasPermission = permissionId ? user.permissions?.includes(permissionId) : false;
 
-  if (!hasRole && !hasPermission) {
+  if (!hasPermission) {
     // Redirect to a safe default page based on role
     if (user.role === 'sales_rep') return <Navigate to="/mobile-sales" replace />;
     if (user.role === 'cashier') return <Navigate to="/pos" replace />;

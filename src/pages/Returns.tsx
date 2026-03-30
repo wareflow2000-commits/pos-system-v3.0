@@ -12,6 +12,10 @@ export default function Returns() {
   const [returnQuantities, setReturnQuantities] = useState<Record<number, number>>({});
   const { user } = useAuth();
 
+  const hasPermission = (permission: string) => {
+    return user?.role === 'admin' || user?.permissions?.includes(permission);
+  };
+
   const searchOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery) return;
@@ -234,14 +238,16 @@ export default function Returns() {
               <AlertCircle className="w-5 h-5" />
               <span className="text-sm font-medium">سيتم خصم قيمة المرتجعات من إيرادات الوردية الحالية وإعادة المنتجات للمخزون.</span>
             </div>
-            <button
-              onClick={handleReturn}
-              disabled={Object.values(returnQuantities).every(q => q === 0)}
-              className="bg-rose-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-rose-700 transition-colors disabled:opacity-50 flex items-center gap-2"
-            >
-              <RotateCcw className="w-5 h-5" />
-              تأكيد الإرجاع
-            </button>
+            {hasPermission('process_returns') && (
+              <button
+                onClick={handleReturn}
+                disabled={Object.values(returnQuantities).every(q => q === 0)}
+                className="bg-rose-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-rose-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                <RotateCcw className="w-5 h-5" />
+                تأكيد الإرجاع
+              </button>
+            )}
           </div>
         </div>
       )}

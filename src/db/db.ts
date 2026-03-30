@@ -279,7 +279,7 @@ export interface PurchaseItem {
 
 export interface StocktakingSession {
   id?: string;
-  status: 'open' | 'closed' | 'approved';
+  status: 'open' | 'closed' | 'approved' | 'suspended';
   createdAt: string;
   createdBy: string;
   branchId?: number;
@@ -516,49 +516,18 @@ export const db = new POSDatabase();
 
 // --- Seed Initial Data ---
 export async function seedDatabase() {
-  const categoryCount = await db.categories.count();
-  if (categoryCount === 0) {
-    const catId1 = await db.categories.add({ name: 'مشروبات', color: 'bg-blue-500', syncStatus: 'pending' });
-    const catId2 = await db.categories.add({ name: 'وجبات خفيفة', color: 'bg-orange-500', syncStatus: 'pending' });
-    const catId3 = await db.categories.add({ name: 'إلكترونيات', color: 'bg-gray-700', syncStatus: 'pending' });
-
-    await db.products.bulkAdd([
-      { barcode: '10001', name: 'مياه معدنية', categoryId: catId1, costPrice: 0.5, sellingPrice: 1.0, stockQuantity: 100, unit: 'piece', conversionFactor: 1, vatRate: 15, syncStatus: 'pending', updatedAt: new Date().toISOString() },
-      { barcode: '10002', name: 'عصير برتقال', categoryId: catId1, costPrice: 1.5, sellingPrice: 3.0, stockQuantity: 50, unit: 'piece', conversionFactor: 1, vatRate: 15, syncStatus: 'pending', updatedAt: new Date().toISOString() },
-      { barcode: '20001', name: 'شيبس بطاطس', categoryId: catId2, costPrice: 2.0, sellingPrice: 3.5, stockQuantity: 80, unit: 'piece', conversionFactor: 1, vatRate: 15, syncStatus: 'pending', updatedAt: new Date().toISOString() },
-      { barcode: '20002', name: 'بسكويت شوكولاتة', categoryId: catId2, costPrice: 1.0, sellingPrice: 2.0, stockQuantity: 120, unit: 'piece', conversionFactor: 1, vatRate: 15, syncStatus: 'pending', updatedAt: new Date().toISOString() },
-      { barcode: '30001', name: 'شاحن هاتف', categoryId: catId3, costPrice: 15.0, sellingPrice: 35.0, stockQuantity: 20, unit: 'piece', conversionFactor: 1, vatRate: 15, syncStatus: 'pending', updatedAt: new Date().toISOString() },
-    ]);
-  }
+  // Database starts empty as requested.
 }
 
 export async function seedUsers() {
   const userCount = await db.employees.count();
   if (userCount === 0) {
-    // Use bcrypt to hash the default password 'max'
+    // Use bcrypt to hash the default password 'admin'
     const bcrypt = await import('bcryptjs');
-    const hashedPassword = bcrypt.default.hashSync('max', 10);
+    const adminHashedPassword = bcrypt.default.hashSync('admin', 10);
     
     await db.employees.add({
-      name: 'Max Admin',
-      username: 'max',
-      password: hashedPassword,
-      pinCode: '0987',
-      role: 'admin',
-      status: 'active',
-      phone: '0000000000',
-      salary: 0,
-      joinDate: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      deviceType: 'desktop',
-      syncStatus: 'pending',
-      permissions: ['can_view_dashboard', 'can_view_pos', 'can_view_returns', 'can_view_inventory', 'can_view_purchases', 'can_view_customers', 'can_view_suppliers', 'can_manage_employees', 'can_view_attendance', 'can_view_payroll', 'can_view_offers', 'can_view_branches', 'can_view_mobile_sales', 'can_view_shifts', 'can_view_expenses', 'can_view_reports', 'can_manage_settings']
-    });
-
-    const adminHashedPassword = bcrypt.default.hashSync('admin', 10);
-    await db.employees.add({
-      name: 'Admin',
+      name: 'المدير العام',
       username: 'admin',
       password: adminHashedPassword,
       pinCode: '1234',
@@ -571,7 +540,20 @@ export async function seedUsers() {
       updatedAt: new Date().toISOString(),
       deviceType: 'desktop',
       syncStatus: 'pending',
-      permissions: ['can_view_dashboard', 'can_view_pos', 'can_view_returns', 'can_view_inventory', 'can_view_purchases', 'can_view_customers', 'can_view_suppliers', 'can_manage_employees', 'can_view_attendance', 'can_view_payroll', 'can_view_offers', 'can_view_branches', 'can_view_mobile_sales', 'can_view_shifts', 'can_view_expenses', 'can_view_reports', 'can_manage_settings']
+      permissions: [
+        'view_dashboard', 'view_pos', 'apply_discounts', 'void_items',
+        'view_returns', 'process_returns', 'view_inventory', 'add_product',
+        'edit_product', 'delete_product', 'manage_categories', 'view_stocktaking',
+        'manage_stocktaking', 'view_purchases', 'add_purchase', 'edit_purchase',
+        'delete_purchase', 'view_customers', 'add_customer', 'edit_customer',
+        'delete_customer', 'view_suppliers', 'add_supplier', 'edit_supplier',
+        'delete_supplier', 'view_employees', 'add_employee', 'edit_employee',
+        'delete_employee', 'view_attendance', 'manage_attendance', 'view_payroll',
+        'manage_payroll', 'view_offers', 'manage_offers', 'view_branches',
+        'manage_branches', 'view_mobile_sales', 'view_shifts', 'manage_shifts',
+        'view_expenses', 'add_expense', 'edit_expense', 'delete_expense',
+        'view_reports', 'manage_settings'
+      ]
     });
   }
 }

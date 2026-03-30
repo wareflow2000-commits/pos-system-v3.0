@@ -18,6 +18,10 @@ export default function Inventory() {
   const [activeTab, setActiveTab] = useState<'products' | 'categories'>('products');
   const { user } = useAuth();
   
+  const hasPermission = (permission: string) => {
+    return user?.role === 'admin' || user?.permissions?.includes(permission);
+  };
+  
   // Barcode Scanner State
   const [isCameraScannerOpen, setIsCameraScannerOpen] = useState(false);
   const [isDeviceScannerOpen, setIsDeviceScannerOpen] = useState(false);
@@ -538,43 +542,53 @@ export default function Inventory() {
                 <Download className="w-5 h-5" />
                 تصدير CSV
               </button>
-              <button 
-                onClick={handleUpdatePricesFromExchangeRate}
-                className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-4 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm border border-indigo-200"
-                title={`تحديث الأسعار بناءً على سعر الصرف الحالي (${storeSettings.exchangeRate})`}
-              >
-                <RefreshCcw className="w-5 h-5" />
-                تحديث الأسعار
-              </button>
-              <button 
-                onClick={() => {
-                  if (storeSettings.scannerType === 'camera') {
-                    setIsCameraScannerOpen(true);
-                  } else {
-                    setIsDeviceScannerOpen(true);
-                  }
-                }}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm"
-              >
-                <ScanLine className="w-5 h-5" />
-                إضافة عبر الباركود
-              </button>
-              <button 
-                onClick={() => handleOpenModal()}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm"
-              >
-                <Plus className="w-5 h-5" />
-                إضافة منتج جديد
-              </button>
+              {hasPermission('edit_product') && (
+                <button 
+                  onClick={handleUpdatePricesFromExchangeRate}
+                  className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-4 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm border border-indigo-200"
+                  title={`تحديث الأسعار بناءً على سعر الصرف الحالي (${storeSettings.exchangeRate})`}
+                >
+                  <RefreshCcw className="w-5 h-5" />
+                  تحديث الأسعار
+                </button>
+              )}
+              {hasPermission('add_product') && (
+                <>
+                  <button 
+                    onClick={() => {
+                      if (storeSettings.scannerType === 'camera') {
+                        setIsCameraScannerOpen(true);
+                      } else {
+                        setIsDeviceScannerOpen(true);
+                      }
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm"
+                  >
+                    <ScanLine className="w-5 h-5" />
+                    إضافة عبر الباركود
+                  </button>
+                  <button 
+                    onClick={() => handleOpenModal()}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm"
+                  >
+                    <Plus className="w-5 h-5" />
+                    إضافة منتج جديد
+                  </button>
+                </>
+              )}
             </>
           ) : (
-            <button 
-              onClick={() => handleOpenCategoryModal()}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm"
-            >
-              <Plus className="w-5 h-5" />
-              إضافة تصنيف جديد
-            </button>
+            <>
+              {hasPermission('manage_categories') && (
+                <button 
+                  onClick={() => handleOpenCategoryModal()}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm"
+                >
+                  <Plus className="w-5 h-5" />
+                  إضافة تصنيف جديد
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -742,20 +756,24 @@ export default function Inventory() {
                       >
                         <Printer className="w-4 h-4" />
                       </button>
-                      <button 
-                        onClick={() => handleOpenModal(product)}
-                        className="text-indigo-600 hover:text-indigo-900 p-2 bg-indigo-50 rounded-lg"
-                        title="تعديل"
-                      >
-                        <Plus className="w-4 h-4 rotate-45" />
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(product.id!)}
-                        className="text-rose-600 hover:text-rose-900 p-2 bg-rose-50 rounded-lg"
-                        title="حذف"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+                      {hasPermission('edit_product') && (
+                        <button 
+                          onClick={() => handleOpenModal(product)}
+                          className="text-indigo-600 hover:text-indigo-900 p-2 bg-indigo-50 rounded-lg"
+                          title="تعديل"
+                        >
+                          <Plus className="w-4 h-4 rotate-45" />
+                        </button>
+                      )}
+                      {hasPermission('delete_product') && (
+                        <button 
+                          onClick={() => handleDelete(product.id!)}
+                          className="text-rose-600 hover:text-rose-900 p-2 bg-rose-50 rounded-lg"
+                          title="حذف"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -788,18 +806,22 @@ export default function Inventory() {
                     <span className="font-bold text-gray-900">{category.name}</span>
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button 
-                      onClick={() => handleOpenCategoryModal(category)}
-                      className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button 
-                      onClick={() => category.id && handleDeleteCategory(category.id)}
-                      className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {hasPermission('manage_categories') && (
+                      <>
+                        <button 
+                          onClick={() => handleOpenCategoryModal(category)}
+                          className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => category.id && handleDeleteCategory(category.id)}
+                          className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               ))}

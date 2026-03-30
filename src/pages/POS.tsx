@@ -14,6 +14,11 @@ import { printService } from '../services/printService';
 // ...
 export default function POS() {
   const { user } = useAuth();
+  
+  const hasPermission = (permission: string) => {
+    return user?.role === 'admin' || user?.permissions?.includes(permission);
+  };
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -496,8 +501,12 @@ export default function POS() {
                 onClick={() => addItem(product)}
                 className="bg-white border border-gray-200 rounded-2xl p-4 flex flex-col items-center text-center hover:border-indigo-500 hover:shadow-md transition-all active:scale-95 group"
               >
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3 group-hover:bg-indigo-50 transition-colors relative">
-                  <Package className="w-8 h-8 text-gray-400 group-hover:text-indigo-500" />
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3 group-hover:bg-indigo-50 transition-colors relative overflow-hidden">
+                  {product.imageUrl ? (
+                    <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <Package className="w-8 h-8 text-gray-400 group-hover:text-indigo-500" />
+                  )}
                   {product.stockQuantity <= (product.minStockLevel || 5) && (
                     <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 rounded-full border-2 border-white" title="مخزون منخفض"></span>
                   )}
@@ -528,14 +537,16 @@ export default function POS() {
             <Receipt className="w-5 h-5 text-indigo-600" />
             الفاتورة الحالية
           </h2>
-          <button 
-            onClick={clearCart}
-            disabled={items.length === 0}
-            className="text-rose-500 hover:bg-rose-50 p-2 rounded-lg transition-colors disabled:opacity-50 disabled:hover:bg-transparent"
-            title="إفراغ السلة"
-          >
-            <Trash2 className="w-5 h-5" />
-          </button>
+          {hasPermission('void_items') && (
+            <button 
+              onClick={clearCart}
+              disabled={items.length === 0}
+              className="text-rose-500 hover:bg-rose-50 p-2 rounded-lg transition-colors disabled:opacity-50 disabled:hover:bg-transparent"
+              title="إفراغ السلة"
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* Restaurant Specific Options */}
@@ -608,28 +619,34 @@ export default function POS() {
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          const discountStr = window.prompt('أدخل قيمة الخصم للمنتج:', item.discount.toString());
-                          if (discountStr !== null) {
-                            const discount = parseFloat(discountStr);
-                            if (!isNaN(discount) && discount >= 0) {
-                              const type = confirm('هل الخصم نسبة مئوية؟ (موافق = نسبة، إلغاء = مبلغ ثابت)') ? 'percentage' : 'fixed';
-                              updateItemDiscount(item.cartItemId, discount, type);
+                      {hasPermission('apply_discounts') && (
+                        <button
+                          onClick={() => {
+                            const discountStr = window.prompt('أدخل قيمة الخصم للمنتج:', item.discount.toString());
+                            if (discountStr !== null) {
+                              const discount = parseFloat(discountStr);
+                              if (!isNaN(discount) && discount >= 0) {
+                                const type = confirm('هل الخصم نسبة مئوية؟ (موافق = نسبة، إلغاء = مبلغ ثابت)') ? 'percentage' : 'fixed';
+                                updateItemDiscount(item.cartItemId, discount, type);
+                              }
                             }
-                          }
-                        }}
-                        className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded transition-colors"
-                      >
-                        خصم
-                      </button>
-                      <div className="flex items-center gap-3 bg-gray-50 rounded-lg p-1 border border-gray-200">
-                        <button 
-                          onClick={() => updateQuantity(item.cartItemId, item.cartQuantity - 1)}
-                          className="w-7 h-7 flex items-center justify-center bg-white rounded shadow-sm text-gray-600 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          }}
+                          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded transition-colors"
                         >
-                          <Minus className="w-4 h-4" />
+                          خصم
                         </button>
+                      )}
+                      <div className="flex items-center gap-3 bg-gray-50 rounded-lg p-1 border border-gray-200">
+                        {hasPermission('void_items') ? (
+                          <button 
+                            onClick={() => updateQuantity(item.cartItemId, item.cartQuantity - 1)}
+                            className="w-7 h-7 flex items-center justify-center bg-white rounded shadow-sm text-gray-600 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          >
+                            <Minus className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <div className="w-7 h-7"></div>
+                        )}
                         <span className="font-bold w-6 text-center text-sm">{item.cartQuantity}</span>
                         <button 
                           onClick={() => updateQuantity(item.cartItemId, item.cartQuantity + 1)}
@@ -708,20 +725,22 @@ export default function POS() {
             <div className="flex justify-between items-center text-rose-500 group">
               <div className="flex items-center gap-2">
                 <span>الخصم</span>
-                <button 
-                  onClick={() => {
-                    const discountStr = window.prompt('أدخل قيمة الخصم (رقم ثابت):', '0');
-                    if (discountStr !== null) {
-                      const discount = parseFloat(discountStr);
-                      if (!isNaN(discount) && discount >= 0) {
-                        setGlobalDiscount(discount, 'fixed');
+                {hasPermission('apply_discounts') && (
+                  <button 
+                    onClick={() => {
+                      const discountStr = window.prompt('أدخل قيمة الخصم (رقم ثابت):', '0');
+                      if (discountStr !== null) {
+                        const discount = parseFloat(discountStr);
+                        if (!isNaN(discount) && discount >= 0) {
+                          setGlobalDiscount(discount, 'fixed');
+                        }
                       }
-                    }
-                  }}
-                  className="text-xs bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded text-rose-600 transition-colors"
-                >
-                  تعديل
-                </button>
+                    }}
+                    className="text-xs bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded text-rose-600 transition-colors"
+                  >
+                    تعديل
+                  </button>
+                )}
               </div>
               <span>- {(getDiscountTotal() + (pointsToRedeem * 0.1)).toFixed(2)} {storeSettings.currency}</span>
             </div>

@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 import path from "path";
+import fs from 'fs';
+import multer from 'multer';
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import bcrypt from "bcryptjs";
@@ -10,6 +12,7 @@ import { eq, sql } from 'drizzle-orm';
 import { products, categories, customers, suppliers, orders, orderItems, shifts, expenses, employees, settings, attendance, loyaltyTransactions, branches, payrolls, offers, purchases, purchaseItems, auditLogs, journalEntries, transactions, stocktakingSessions, stocktakingEntries, syncQueue } from "./drizzle/schema.js";
 import { startSyncEngine } from "./syncEngine.js";
 
+const upload = multer({ dest: 'uploads/' });
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -34,6 +37,46 @@ async function startServer() {
     res.json({ status: "ok", database: "sqlite" });
   });
 
+  // --- Sync Queue ---
+  app.get("/api/sync-queue", async (req, res) => {
+    try {
+      const queue = await db.select().from(syncQueue).orderBy(sql`${syncQueue.createdAt} DESC`).limit(100);
+      res.json(queue);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch sync queue" });
+    }
+  });
+
+  app.delete("/api/sync-queue/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+      await db.delete(syncQueue).where(eq(syncQueue.id, id));
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete sync queue item" });
+    }
+  });
+
+  app.post("/api/sync-queue/:id/retry", async (req, res) => {
+    try {
+      const id = req.params.id;
+      await db.update(syncQueue).set({ status: 'pending' }).where(eq(syncQueue.id, id));
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to retry sync queue item" });
+    }
+  });
+
+  app.post("/api/sync-queue/process", async (req, res) => {
+    try {
+      const { processSyncQueue } = await import('./syncEngine.js');
+      await processSyncQueue();
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to process sync queue" });
+    }
+  });
+
   // Middleware to strip syncStatus from incoming requests
   app.use((req, res, next) => {
     if (req.body && typeof req.body === 'object') {
@@ -49,6 +92,83 @@ async function startServer() {
         });
       }
     }
+    next();
+  });
+
+  // Middleware to automatically queue sync operations
+  app.use((req, res, next) => {
+    const originalJson = res.json;
+    res.json = function (body) {
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        const method = req.method;
+        const path = req.path;
+        
+        if (path.startsWith('/api/') && !path.startsWith('/api/sync') && !path.startsWith('/api/health')) {
+          const parts = path.split('/');
+          const resource = parts[2]; // e.g., 'products'
+          const idFromPath = parts[3];
+          
+          let type = '';
+          if (resource === 'products') type = 'Product';
+          else if (resource === 'categories') type = 'Category';
+          else if (resource === 'customers') type = 'Customer';
+          else if (resource === 'suppliers') type = 'Supplier';
+          else if (resource === 'employees') type = 'Employee';
+          else if (resource === 'expenses') type = 'Expense';
+          else if (resource === 'shifts') type = 'Shift';
+          else if (resource === 'orders') type = 'Order';
+          else if (resource === 'purchases') type = 'Purchase';
+          else if (resource === 'attendance') type = 'Attendance';
+          else if (resource === 'branches') type = 'Branch';
+          else if (resource === 'payrolls') type = 'Payroll';
+          else if (resource === 'offers') type = 'Offer';
+          else if (resource === 'loyalty-transactions') type = 'LoyaltyTransaction';
+          else if (resource === 'settings') type = 'Setting';
+          else if (resource === 'audit-logs') type = 'AuditLog';
+          else if (resource === 'journal-entries') type = 'JournalEntry';
+          else if (resource === 'transactions') type = 'Transaction';
+          else if (resource === 'stocktaking-sessions') type = 'StocktakingSession';
+          else if (resource === 'stocktaking-entries') type = 'StocktakingEntry';
+
+          if (type && (method === 'POST' || method === 'PUT' || method === 'DELETE')) {
+            let action = '';
+            let data = null;
+
+            if (method === 'POST') {
+              action = 'create';
+              data = body; // The created object
+            } else if (method === 'PUT') {
+              action = 'update';
+              data = body; // The updated object
+            } else if (method === 'DELETE') {
+              action = 'delete';
+              data = { id: idFromPath }; // The deleted ID
+            }
+
+            if (action && data) {
+              // Handle arrays (e.g., bulk inserts)
+              const items = Array.isArray(data) ? data : [data];
+              
+              // Insert into syncQueue asynchronously
+              Promise.all(items.map(item => {
+                // For delete, we only need the ID. For create/update, we need the whole object.
+                const payload = action === 'delete' ? { id: idFromPath } : item;
+                
+                return db.insert(syncQueue).values({
+                  id: crypto.randomUUID(),
+                  type,
+                  action,
+                  data: JSON.stringify(payload),
+                  status: 'pending',
+                  createdAt: new Date().toISOString()
+                });
+              })).catch(err => console.error('Failed to queue sync:', err));
+            }
+          }
+        }
+      }
+      return originalJson.call(this, body);
+    };
     next();
   });
 
@@ -193,6 +313,15 @@ async function startServer() {
     }
   });
 
+  app.delete("/api/customers/:id", async (req, res) => {
+    try {
+      await db.delete(customers).where(eq(customers.id, parseInt(req.params.id)));
+      res.json({ message: "Customer deleted" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete customer" });
+    }
+  });
+
   // --- Suppliers ---
   app.get("/api/suppliers", async (req, res) => {
     try {
@@ -230,6 +359,15 @@ async function startServer() {
       res.json(supplier);
     } catch (error) {
       res.status(500).json({ error: "Failed to update supplier" });
+    }
+  });
+
+  app.delete("/api/suppliers/:id", async (req, res) => {
+    try {
+      await db.delete(suppliers).where(eq(suppliers.id, parseInt(req.params.id)));
+      res.json({ message: "Supplier deleted" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete supplier" });
     }
   });
 
@@ -400,6 +538,15 @@ async function startServer() {
     }
   });
 
+  app.delete("/api/employees/:id", async (req, res) => {
+    try {
+      await db.delete(employees).where(eq(employees.id, parseInt(req.params.id)));
+      res.json({ message: "Employee deleted" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete employee" });
+    }
+  });
+
   app.post("/api/login", async (req, res) => {
     const { username, password, pinCode } = req.body;
     
@@ -470,7 +617,34 @@ async function startServer() {
     }
   });
 
-  // --- Purchases (Transaction) ---
+  app.post("/api/settings/clearData", async (req, res) => {
+    try {
+      const dbPath = path.join(process.cwd(), 'dev.db');
+      if (fs.existsSync(dbPath)) {
+        fs.unlinkSync(dbPath);
+      }
+      // Re-initialize database
+      // This is a simplified approach, might need a more robust way to re-initialize
+      res.json({ message: "Data cleared. Please restart the server." });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to clear data" });
+    }
+  });
+
+  app.post("/api/settings/importSql", upload.single('file'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+      const dbPath = path.join(process.cwd(), 'dev.db');
+      fs.copyFileSync(req.file.path, dbPath);
+      fs.unlinkSync(req.file.path);
+      res.json({ message: "Data imported. Please restart the server." });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to import data" });
+    }
+  });
+
   app.post("/api/purchases", async (req, res) => {
     const { purchase, purchaseItems } = req.body;
     
@@ -512,6 +686,32 @@ async function startServer() {
     } catch (error) {
       console.error("Purchase transaction failed:", error);
       res.status(500).json({ error: "Purchase failed" });
+    }
+  });
+
+  app.put("/api/purchases/:id", async (req, res) => {
+    try {
+      const [purchase] = await db.update(purchases)
+        .set({
+          ...req.body,
+          updatedAt: new Date().toISOString(),
+          isSynced: 0
+        })
+        .where(eq(purchases.id, req.params.id))
+        .returning();
+      res.json(purchase);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update purchase" });
+    }
+  });
+
+  app.delete("/api/purchases/:id", async (req, res) => {
+    try {
+      await db.delete(purchases).where(eq(purchases.id, req.params.id));
+      await db.delete(purchaseItems).where(eq(purchaseItems.purchaseId, req.params.id));
+      res.json({ message: "Purchase deleted" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete purchase" });
     }
   });
 
@@ -626,6 +826,32 @@ async function startServer() {
       res.json(session);
     } catch (error) {
       res.status(500).json({ error: "Failed to update stocktaking session" });
+    }
+  });
+
+  app.put("/api/stocktakingSessions/:id/status", async (req, res) => {
+    try {
+      const { status } = req.body;
+      const [session] = await db.update(stocktakingSessions)
+        .set({
+          status: status,
+          isSynced: 0
+        })
+        .where(eq(stocktakingSessions.id, req.params.id))
+        .returning();
+      res.json(session);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update stocktaking session status" });
+    }
+  });
+
+  app.delete("/api/stocktakingSessions/:id", async (req, res) => {
+    try {
+      await db.delete(stocktakingSessions).where(eq(stocktakingSessions.id, req.params.id));
+      await db.delete(stocktakingEntries).where(eq(stocktakingEntries.sessionId, req.params.id));
+      res.json({ message: "Stocktaking session deleted" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete stocktaking session" });
     }
   });
 
