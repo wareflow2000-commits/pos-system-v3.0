@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { io, Socket } from 'socket.io-client';
+import { io } from 'socket.io-client';
 import { syncService } from './services/syncService';
 import Layout from './components/Layout';
 import POS from './pages/POS';
@@ -37,7 +37,7 @@ function AppContent() {
   const [isLoading, setIsLoading] = useState(true);
   const { user, isLoading: isAuthLoading } = useAuth();
   const settings = useSettings();
-  const [socket, setSocket] = useState<Socket | null>(null);
+  const [socket, setSocket] = useState<any | null>(null);
 
   useEffect(() => {
     if (settings) {

@@ -95,6 +95,15 @@ export async function pullFromSupabase() {
 }
 
 export async function processSyncQueue() {
+  const isCloudSyncEnabled = await db.select().from(settings).where(eq(settings.key, 'enableCloudSync'));
+  const enabled = isCloudSyncEnabled[0]?.value === 'true';
+  
+  if (!enabled) {
+    // Clear the queue if cloud sync is disabled
+    await db.delete(syncQueue);
+    return;
+  }
+
   if (!supabase) {
     await initSupabase();
   }

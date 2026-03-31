@@ -133,6 +133,7 @@ async function startServer() {
           else if (resource === 'expenses') type = 'Expense';
           else if (resource === 'shifts') type = 'Shift';
           else if (resource === 'orders') type = 'Order';
+          else if (resource === 'checkout') type = 'Order';
           else if (resource === 'purchases') type = 'Purchase';
           else if (resource === 'attendance') type = 'Attendance';
           else if (resource === 'branches') type = 'Branch';

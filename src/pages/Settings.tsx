@@ -114,10 +114,14 @@ const Settings: React.FC = () => {
 
   const handleSave = async () => {
     try {
-      const promises = Object.entries(settings).map(([key, value]) => 
-        db.settings.put({ key, value: String(value), syncStatus: 'pending', updatedAt: new Date().toISOString() })
-      );
-      await Promise.all(promises);
+      for (const [key, value] of Object.entries(settings)) {
+        const existing = await db.settings.where('key').equals(key).first();
+        if (existing) {
+          await db.settings.update(existing.id!, { value: String(value), syncStatus: 'pending', updatedAt: new Date().toISOString() });
+        } else {
+          await db.settings.add({ key, value: String(value), syncStatus: 'pending', updatedAt: new Date().toISOString() } as any);
+        }
+      }
       toast.success('تم حفظ الإعدادات بنجاح');
       
       // Apply theme changes immediately

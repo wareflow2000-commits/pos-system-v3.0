@@ -24,6 +24,12 @@ export const updateApiBase = (url: string) => {
 
 const requestWithRetry = async (fn: () => Promise<any>, retries = 3, delay = 1000): Promise<any> => {
   try {
+    const isOnlineModeSetting = await db.settings.where('key').equals('isOnlineMode').first();
+    const isOnlineMode = isOnlineModeSetting ? isOnlineModeSetting.value === 'true' : false;
+    
+    if (!isOnlineMode) {
+      throw new Error('Offline mode enabled');
+    }
     return await fn();
   } catch (error) {
     if (retries === 0) throw error;
