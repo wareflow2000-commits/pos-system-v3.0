@@ -26,11 +26,6 @@ export const syncService = {
     const enableCloudSyncSetting = await db.settings.where('key').equals('enableCloudSync').first();
     const enableCloudSync = enableCloudSyncSetting ? enableCloudSyncSetting.value === 'true' : false;
 
-    if (syncMode === 'local' && !enableCloudSync) {
-      console.log('Sync skipped: Local-only mode enabled');
-      return false;
-    }
-
     if (!navigator.onLine) {
       throw new Error('لا يوجد اتصال بالإنترنت');
     }
@@ -39,10 +34,8 @@ export const syncService = {
 
     try {
       // Sync with local server
-      if (syncMode === 'local' || (syncMode === 'cloud' && enableCloudSync)) {
-        await this.pushAll();
-        await this.pullAll();
-      }
+      await this.pushAll();
+      await this.pullAll();
 
       // Sync with cloud (Supabase) if enabled
       if (enableCloudSync) {

@@ -1167,6 +1167,48 @@ const Settings: React.FC = () => {
                         </button>
                       </div>
                     </div>
+
+                    <div className="p-8 bg-gray-50 rounded-[40px] border border-gray-100 space-y-6">
+                      <div className="flex items-center gap-3 mb-2">
+                        <Database className="w-6 h-6 text-gray-400" />
+                        <h3 className="text-lg font-bold text-gray-800">النسخ الاحتياطي التلقائي</h3>
+                      </div>
+                      
+                      <div className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-gray-100">
+                        <div className="relative inline-flex items-center cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            id="autoBackupGeneral"
+                            checked={settings.autoBackup}
+                            onChange={(e) => setSettings({ ...settings, autoBackup: e.target.checked })}
+                            className="sr-only peer" 
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </div>
+                        <label htmlFor="autoBackupGeneral" className="text-sm font-bold text-gray-700 cursor-pointer">
+                          تفعيل النسخ الاحتياطي التلقائي
+                        </label>
+                      </div>
+
+                      {settings.autoBackup && (
+                        <div className="space-y-2">
+                          <label className="text-sm font-bold text-gray-500">تكرار النسخ الاحتياطي</label>
+                          <select
+                            value={settings.autoBackupInterval || 'daily'}
+                            onChange={(e) => setSettings({ ...settings, autoBackupInterval: e.target.value as any })}
+                            className="w-full px-6 py-4 bg-white border border-gray-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all"
+                          >
+                            <option value="hourly">كل ساعة</option>
+                            <option value="daily">يومياً</option>
+                            <option value="weekly">أسبوعياً</option>
+                            <option value="monthly">شهرياً</option>
+                          </select>
+                          <p className="text-xs text-gray-500 mt-2">
+                            سيتم حفظ النسخ الاحتياطية تلقائياً في مجلد `backups` بجوار قاعدة البيانات.
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </motion.div>

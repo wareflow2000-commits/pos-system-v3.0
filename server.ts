@@ -650,7 +650,8 @@ async function startServer() {
 
   app.post("/api/settings/clearData", async (req, res) => {
     try {
-      const dbPath = path.join(process.cwd(), 'dev.db');
+      const { getDbPath } = await import('./drizzle/db.js');
+      const dbPath = getDbPath();
       if (fs.existsSync(dbPath)) {
         fs.unlinkSync(dbPath);
       }
@@ -667,7 +668,8 @@ async function startServer() {
       if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });
       }
-      const dbPath = path.join(process.cwd(), 'dev.db');
+      const { getDbPath } = await import('./drizzle/db.js');
+      const dbPath = getDbPath();
       fs.copyFileSync(req.file.path, dbPath);
       fs.unlinkSync(req.file.path);
       res.json({ message: "Data imported. Please restart the server." });
@@ -930,6 +932,17 @@ async function startServer() {
     }
   });
 
+  // --- Backup ---
+  app.get("/api/backup", async (req, res) => {
+    const { getDbPath } = await import('./drizzle/db.js');
+    const dbPath = getDbPath();
+    res.download(dbPath, `backup-${new Date().toISOString().split('T')[0]}.db`, (err) => {
+      if (err) {
+        console.error("Failed to download backup:", err);
+      }
+    });
+  });
+
   // ==========================================
   // VITE MIDDLEWARE (For serving the React App)
   // ==========================================
@@ -946,16 +959,6 @@ async function startServer() {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
-
-  // --- Backup ---
-  app.get("/api/backup", (req, res) => {
-    const dbPath = path.join(process.cwd(), 'dev.db');
-    res.download(dbPath, `backup-${new Date().toISOString().split('T')[0]}.db`, (err) => {
-      if (err) {
-        console.error("Failed to download backup:", err);
-      }
-    });
-  });
 
   // 1. تشغيل السيرفر فوراً
   httpServer.listen(PORT, "0.0.0.0", () => {
@@ -1015,9 +1018,71 @@ async function initBackgroundServices() {
 
     startSyncEngine();
     console.log("Sync engine started.");
+
+    startAutoBackup();
+    console.log("Auto backup service started.");
   } catch (error) {
     console.error("Background initialization error:", error);
   }
+}
+
+function startAutoBackup() {
+  const checkAndBackup = async () => {
+    try {
+      const autoBackupSetting = await db.select().from(settings).where(eq(settings.key, 'autoBackup'));
+      const isAutoBackupEnabled = autoBackupSetting.length > 0 && autoBackupSetting[0].value === 'true';
+      
+      if (!isAutoBackupEnabled) return;
+
+      const intervalSetting = await db.select().from(settings).where(eq(settings.key, 'autoBackupInterval'));
+      const interval = intervalSetting.length > 0 ? intervalSetting[0].value : 'daily';
+
+      const lastBackupSetting = await db.select().from(settings).where(eq(settings.key, 'lastAutoBackup'));
+      const lastBackupTime = lastBackupSetting.length > 0 ? new Date(lastBackupSetting[0].value).getTime() : 0;
+      const now = Date.now();
+
+      let shouldBackup = false;
+      const hoursSinceLastBackup = (now - lastBackupTime) / (1000 * 60 * 60);
+
+      if (interval === 'hourly' && hoursSinceLastBackup >= 1) shouldBackup = true;
+      else if (interval === 'daily' && hoursSinceLastBackup >= 24) shouldBackup = true;
+      else if (interval === 'weekly' && hoursSinceLastBackup >= 168) shouldBackup = true;
+      else if (interval === 'monthly' && hoursSinceLastBackup >= 720) shouldBackup = true;
+      else if (lastBackupTime === 0) shouldBackup = true; // First time backup
+
+      if (shouldBackup) {
+        const { getDbPath } = await import('./drizzle/db.js');
+        const dbPath = getDbPath();
+        const backupsDir = path.join(path.dirname(dbPath), 'backups');
+        
+        if (!fs.existsSync(backupsDir)) {
+          fs.mkdirSync(backupsDir, { recursive: true });
+        }
+
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const backupPath = path.join(backupsDir, `backup-${timestamp}.db`);
+        
+        fs.copyFileSync(dbPath, backupPath);
+        console.log(`Auto backup created successfully at: ${backupPath}`);
+
+        // Update last backup time
+        const existingLastBackup = await db.select().from(settings).where(eq(settings.key, 'lastAutoBackup'));
+        if (existingLastBackup.length > 0) {
+          await db.update(settings).set({ value: new Date().toISOString(), updatedAt: new Date().toISOString() }).where(eq(settings.key, 'lastAutoBackup'));
+        } else {
+          await db.insert(settings).values({ key: 'lastAutoBackup', value: new Date().toISOString(), updatedAt: new Date().toISOString() });
+        }
+      }
+    } catch (error) {
+      console.error("Auto backup failed:", error);
+    }
+  };
+
+  // Check immediately on startup
+  checkAndBackup();
+
+  // Check every hour
+  setInterval(checkAndBackup, 1000 * 60 * 60);
 }
 
 startServer();
