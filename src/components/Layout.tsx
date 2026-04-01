@@ -6,6 +6,7 @@ import { apiService } from '../services/apiService';
 import { syncService } from '../services/syncService';
 import { useAuth, Role } from '../context/AuthContext';
 import { useSyncStore } from '../store/syncStore';
+import { DatabaseStatusIndicator } from './DatabaseStatusIndicator';
 import SyncIndicator from './SyncIndicator';
 
 export default function Layout() {
@@ -15,6 +16,8 @@ export default function Layout() {
   const [themeName, setThemeName] = useState('modern');
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+
+  const [deviceRole, setDeviceRole] = useState<'server' | 'client'>('server');
 
   useEffect(() => {
     // Seed DB on startup
@@ -26,6 +29,32 @@ export default function Layout() {
     });
     loadSettings();
     checkLowStock();
+
+    // Load device role
+    db.settings.where('key').equals('deviceRole').first().then(setting => {
+      if (setting && setting.value) {
+        setDeviceRole(setting.value as 'server' | 'client');
+      }
+    });
+
+    // مستشعر عودة الاتصال
+    const handleOnline = () => {
+      console.log('تم استعادة الاتصال، جاري مزامنة البيانات المعلقة...');
+      syncService.pushAll();
+    };
+    window.addEventListener('online', handleOnline);
+
+    // Periodic sync every 30 seconds
+    const syncInterval = setInterval(() => {
+      if (navigator.onLine) {
+        handleSync();
+      }
+    }, 30000);
+
+    return () => {
+      clearInterval(syncInterval);
+      window.removeEventListener('online', handleOnline);
+    };
   }, []);
 
   const handleSync = async () => {
@@ -154,6 +183,9 @@ export default function Layout() {
   const filteredNavItems = navItems.filter(item => {
     if (!user) return false;
     
+    // Hide sync status if device is server
+    if (item.to === '/sync-status' && deviceRole === 'server') return false;
+    
     // Admin always has access
     if (user.role === 'admin') return true;
 
@@ -203,18 +235,20 @@ export default function Layout() {
         </nav>
 
         <div className="mt-4 shrink-0 flex flex-col items-center gap-4 w-full px-3">
-          <button 
-            onClick={handleSync}
-            disabled={isSyncing || !isOnline}
-            className={`flex flex-col items-center justify-center p-2 rounded-xl w-full transition-all ${
-              isSyncing ? 'animate-pulse text-indigo-600 bg-indigo-50' : 
-              !isOnline ? 'text-gray-300 bg-gray-50 cursor-not-allowed' :
-              'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'
-            }`}
-          >
-            <RefreshCw className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} />
-            <span className="text-[9px] mt-1 font-bold">{isSyncing ? 'جاري...' : 'مزامنة'}</span>
-          </button>
+          {deviceRole === 'client' && (
+            <button 
+              onClick={handleSync}
+              disabled={isSyncing || !isOnline}
+              className={`flex flex-col items-center justify-center p-2 rounded-xl w-full transition-all ${
+                isSyncing ? 'animate-pulse text-indigo-600 bg-indigo-50' : 
+                !isOnline ? 'text-gray-300 bg-gray-50 cursor-not-allowed' :
+                'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'
+              }`}
+            >
+              <RefreshCw className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span className="text-[9px] mt-1 font-bold">{isSyncing ? 'جاري...' : 'مزامنة'}</span>
+            </button>
+          )}
 
           <div className={`flex flex-col items-center justify-center p-2 rounded-xl w-full ${isOnline ? 'text-emerald-500 bg-emerald-50' : 'text-rose-500 bg-rose-50'}`}>
             {isOnline ? <Wifi className="w-5 h-5" /> : <WifiOff className="w-5 h-5" />}
@@ -242,7 +276,8 @@ export default function Layout() {
           </div>
           
           <div className="flex items-center gap-4">
-            <SyncIndicator />
+            <DatabaseStatusIndicator />
+            {deviceRole === 'client' && <SyncIndicator />}
             <div className="h-6 w-px bg-gray-300"></div>
             {lowStockCount > 0 && (
               <button 

@@ -45,12 +45,30 @@ async function startServer() {
   app.use(cors());
   app.use(express.json({ limit: '50mb' })); // Increased limit for bulk sync
 
+  // Request Logger
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api/')) {
+      console.log(`[API] ${req.method} ${req.path}`);
+    }
+    next();
+  });
+
   // ==========================================
   // API ROUTES (SQLite / Prisma)
   // ==========================================
 
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", database: "sqlite" });
+  // --- Health Check ---
+  app.get("/api/health", async (req, res) => {
+    try {
+      console.log("[Health Check] Starting query...");
+      // Perform a simple query to verify database connectivity
+      await db.select().from(settings).limit(1);
+      console.log("[Health Check] Query finished.");
+      res.json({ status: "ok", database: "sqlite", connected: true });
+    } catch (error) {
+      console.error("Database health check failed:", error);
+      res.status(500).json({ status: "error", database: "sqlite", connected: false, message: error instanceof Error ? error.message : String(error) });
+    }
   });
 
   // --- Sync Queue ---
@@ -210,7 +228,12 @@ async function startServer() {
         ...data,
         isSynced: 0,
         updatedAt: new Date().toISOString()
-      }).returning();
+      })
+        .onConflictDoUpdate({
+          target: products.id,
+          set: { ...data, isSynced: 0, updatedAt: new Date().toISOString() }
+        })
+        .returning();
       res.status(201).json(product);
     } catch (error) {
       console.error(error);
@@ -262,7 +285,12 @@ async function startServer() {
         isSynced: 0,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
-      }).returning();
+      })
+        .onConflictDoUpdate({
+          target: categories.id,
+          set: { ...req.body, isSynced: 0, updatedAt: new Date().toISOString() }
+        })
+        .returning();
       res.status(201).json(category);
     } catch (error) {
       res.status(500).json({ error: "Failed to create category" });
@@ -311,7 +339,12 @@ async function startServer() {
         isSynced: 0,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
-      }).returning();
+      })
+        .onConflictDoUpdate({
+          target: customers.id,
+          set: { ...req.body, isSynced: 0, updatedAt: new Date().toISOString() }
+        })
+        .returning();
       res.status(201).json(customer);
     } catch (error) {
       res.status(500).json({ error: "Failed to create customer" });
@@ -360,7 +393,12 @@ async function startServer() {
         isSynced: 0,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
-      }).returning();
+      })
+        .onConflictDoUpdate({
+          target: suppliers.id,
+          set: { ...req.body, isSynced: 0, updatedAt: new Date().toISOString() }
+        })
+        .returning();
       res.status(201).json(supplier);
     } catch (error) {
       res.status(500).json({ error: "Failed to create supplier" });
@@ -487,6 +525,25 @@ async function startServer() {
     }
   });
 
+  app.post("/api/orders", async (req, res) => {
+    try {
+      const [order] = await db.insert(orders).values({
+        ...req.body,
+        isSynced: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      })
+        .onConflictDoUpdate({
+          target: orders.id,
+          set: { ...req.body, isSynced: 0, updatedAt: new Date().toISOString() }
+        })
+        .returning();
+      res.status(201).json(order);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create order" });
+    }
+  });
+
   app.put("/api/orders/:id", async (req, res) => {
     try {
       const [order] = await db.update(orders)
@@ -532,7 +589,12 @@ async function startServer() {
         isSynced: 0,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
-      }).returning();
+      })
+        .onConflictDoUpdate({
+          target: employees.id,
+          set: { ...data, isSynced: 0, updatedAt: new Date().toISOString() }
+        })
+        .returning();
       if (employee.permissions && typeof employee.permissions === 'string') {
         try { employee.permissions = JSON.parse(employee.permissions); } catch (e) {}
       }
@@ -678,6 +740,15 @@ async function startServer() {
     }
   });
 
+  app.get("/api/purchases", async (req, res) => {
+    try {
+      const purchasesList = await db.select().from(purchases);
+      res.json(purchasesList);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch purchases" });
+    }
+  });
+
   app.post("/api/purchases", async (req, res) => {
     const { purchase, purchaseItems } = req.body;
     
@@ -767,7 +838,12 @@ async function startServer() {
         isSynced: 0,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
-      }).returning();
+      })
+        .onConflictDoUpdate({
+          target: shifts.id,
+          set: { ...req.body, isSynced: 0, updatedAt: new Date().toISOString() }
+        })
+        .returning();
       res.status(201).json(shift);
     } catch (error) {
       res.status(500).json({ error: "Failed to create shift" });
@@ -808,7 +884,12 @@ async function startServer() {
         isSynced: 0,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
-      }).returning();
+      })
+        .onConflictDoUpdate({
+          target: expenses.id,
+          set: { ...req.body, isSynced: 0, updatedAt: new Date().toISOString() }
+        })
+        .returning();
       res.status(201).json(expense);
     } catch (error) {
       res.status(500).json({ error: "Failed to create expense" });
@@ -821,6 +902,291 @@ async function startServer() {
       res.json({ message: "Expense deleted" });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete expense" });
+    }
+  });
+
+  // --- Order Items ---
+  app.get("/api/orderItems", async (req, res) => {
+    try {
+      const items = await db.select().from(orderItems);
+      res.json(items);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch order items" });
+    }
+  });
+
+  app.post("/api/orderItems", async (req, res) => {
+    try {
+      const [item] = await db.insert(orderItems).values({
+        ...req.body,
+        isSynced: 0,
+        createdAt: new Date().toISOString()
+      })
+        .onConflictDoUpdate({
+          target: orderItems.id,
+          set: { ...req.body, isSynced: 0, updatedAt: new Date().toISOString() }
+        })
+        .returning();
+      res.status(201).json(item);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create order item" });
+    }
+  });
+
+  app.delete("/api/orderItems/:id", async (req, res) => {
+    try {
+      await db.delete(orderItems).where(eq(orderItems.id, parseInt(req.params.id)));
+      res.json({ message: "Order item deleted" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete order item" });
+    }
+  });
+
+  // --- Attendance ---
+  app.get("/api/attendance", async (req, res) => {
+    try {
+      const list = await db.select().from(attendance);
+      res.json(list);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch attendance" });
+    }
+  });
+
+  app.post("/api/attendance", async (req, res) => {
+    try {
+      const [record] = await db.insert(attendance).values({
+        ...req.body,
+        isSynced: 0,
+        createdAt: new Date().toISOString()
+      })
+        .onConflictDoUpdate({
+          target: attendance.id,
+          set: { ...req.body, isSynced: 0, updatedAt: new Date().toISOString() }
+        })
+        .returning();
+      res.status(201).json(record);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to record attendance" });
+    }
+  });
+
+  app.put("/api/attendance/:id", async (req, res) => {
+    try {
+      const [record] = await db.update(attendance)
+        .set({ ...req.body, isSynced: 0 })
+        .where(eq(attendance.id, req.params.id))
+        .returning();
+      res.json(record);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update attendance" });
+    }
+  });
+
+  // --- Loyalty Transactions ---
+  app.get("/api/loyalty-transactions", async (req, res) => {
+    try {
+      const list = await db.select().from(loyaltyTransactions);
+      res.json(list);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch loyalty transactions" });
+    }
+  });
+
+  app.post("/api/loyalty-transactions", async (req, res) => {
+    try {
+      const [record] = await db.insert(loyaltyTransactions).values({
+        ...req.body,
+        isSynced: 0,
+        createdAt: new Date().toISOString()
+      })
+        .onConflictDoUpdate({
+          target: loyaltyTransactions.id,
+          set: { ...req.body, isSynced: 0, updatedAt: new Date().toISOString() }
+        })
+        .returning();
+      res.status(201).json(record);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create loyalty transaction" });
+    }
+  });
+
+  // --- Payroll ---
+  app.get("/api/payroll", async (req, res) => {
+    try {
+      const list = await db.select().from(payrolls);
+      res.json(list);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch payroll" });
+    }
+  });
+
+  app.post("/api/payroll", async (req, res) => {
+    try {
+      const [record] = await db.insert(payrolls).values({
+        ...req.body,
+        isSynced: 0,
+        createdAt: new Date().toISOString()
+      })
+        .onConflictDoUpdate({
+          target: payrolls.id,
+          set: { ...req.body, isSynced: 0, updatedAt: new Date().toISOString() }
+        })
+        .returning();
+      res.status(201).json(record);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create payroll" });
+    }
+  });
+
+  // --- Branches ---
+  app.get("/api/branches", async (req, res) => {
+    try {
+      const list = await db.select().from(branches);
+      res.json(list);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch branches" });
+    }
+  });
+
+  app.post("/api/branches", async (req, res) => {
+    try {
+      const [record] = await db.insert(branches).values({
+        ...req.body,
+        isSynced: 0,
+        createdAt: new Date().toISOString()
+      })
+        .onConflictDoUpdate({
+          target: branches.id,
+          set: { ...req.body, isSynced: 0, updatedAt: new Date().toISOString() }
+        })
+        .returning();
+      res.status(201).json(record);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create branch" });
+    }
+  });
+
+  app.put("/api/branches/:id", async (req, res) => {
+    try {
+      const [record] = await db.update(branches)
+        .set({ ...req.body, isSynced: 0 })
+        .where(eq(branches.id, parseInt(req.params.id)))
+        .returning();
+      res.json(record);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update branch" });
+    }
+  });
+
+  app.delete("/api/branches/:id", async (req, res) => {
+    try {
+      await db.delete(branches).where(eq(branches.id, parseInt(req.params.id)));
+      res.json({ message: "Branch deleted" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete branch" });
+    }
+  });
+
+  // --- Offers ---
+  app.get("/api/offers", async (req, res) => {
+    try {
+      const list = await db.select().from(offers);
+      res.json(list);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch offers" });
+    }
+  });
+
+  app.post("/api/offers", async (req, res) => {
+    try {
+      const [record] = await db.insert(offers).values({
+        ...req.body,
+        isSynced: 0,
+        createdAt: new Date().toISOString()
+      })
+        .onConflictDoUpdate({
+          target: offers.id,
+          set: { ...req.body, isSynced: 0, updatedAt: new Date().toISOString() }
+        })
+        .returning();
+      res.status(201).json(record);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create offer" });
+    }
+  });
+
+  app.put("/api/offers/:id", async (req, res) => {
+    try {
+      const [record] = await db.update(offers)
+        .set({ ...req.body, isSynced: 0 })
+        .where(eq(offers.id, parseInt(req.params.id)))
+        .returning();
+      res.json(record);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update offer" });
+    }
+  });
+
+  app.delete("/api/offers/:id", async (req, res) => {
+    try {
+      await db.delete(offers).where(eq(offers.id, parseInt(req.params.id)));
+      res.json({ message: "Offer deleted" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete offer" });
+    }
+  });
+
+  // --- Purchase Items ---
+  app.get("/api/purchaseItems", async (req, res) => {
+    try {
+      const list = await db.select().from(purchaseItems);
+      res.json(list);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch purchase items" });
+    }
+  });
+
+  app.post("/api/purchaseItems", async (req, res) => {
+    try {
+      const [record] = await db.insert(purchaseItems).values({
+        ...req.body,
+        isSynced: 0,
+        createdAt: new Date().toISOString()
+      })
+        .onConflictDoUpdate({
+          target: purchaseItems.id,
+          set: { ...req.body, isSynced: 0, updatedAt: new Date().toISOString() }
+        })
+        .returning();
+      res.status(201).json(record);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create purchase item" });
+    }
+  });
+
+  // --- Reports ---
+  app.get("/api/reports/sales", async (req, res) => {
+    try {
+      const { startDate, endDate, branchId } = req.query;
+      const conditions = [];
+      
+      if (startDate && endDate) {
+        conditions.push(sql`date >= ${startDate} AND date <= ${endDate}`);
+      }
+      if (branchId) {
+        conditions.push(eq(orders.branchId, parseInt(branchId as string)));
+      }
+      
+      let query = db.select().from(orders);
+      if (conditions.length > 0) {
+        // @ts-ignore
+        query = query.where(and(...conditions));
+      }
+      
+      const sales = await query;
+      res.json(sales);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch sales report" });
     }
   });
 
@@ -840,7 +1206,12 @@ async function startServer() {
         ...req.body,
         isSynced: 0,
         createdAt: new Date().toISOString()
-      }).returning();
+      })
+        .onConflictDoUpdate({
+          target: stocktakingSessions.id,
+          set: { ...req.body, isSynced: 0, updatedAt: new Date().toISOString() }
+        })
+        .returning();
       res.status(201).json(session);
     } catch (error) {
       res.status(500).json({ error: "Failed to create stocktaking session" });
@@ -903,7 +1274,12 @@ async function startServer() {
         ...req.body,
         isSynced: 0,
         scannedAt: new Date().toISOString()
-      }).returning();
+      })
+        .onConflictDoUpdate({
+          target: stocktakingEntries.id,
+          set: { ...req.body, isSynced: 0, updatedAt: new Date().toISOString() }
+        })
+        .returning();
       res.status(201).json(entry);
     } catch (error) {
       res.status(500).json({ error: "Failed to create stocktaking entry" });
@@ -925,7 +1301,12 @@ async function startServer() {
       const [log] = await db.insert(auditLogs).values({
         ...req.body,
         date: new Date().toISOString()
-      }).returning();
+      })
+        .onConflictDoUpdate({
+          target: auditLogs.id,
+          set: { ...req.body, isSynced: 0, updatedAt: new Date().toISOString() }
+        })
+        .returning();
       res.status(201).json(log);
     } catch (error) {
       res.status(500).json({ error: "Failed to create audit log" });
@@ -1034,8 +1415,16 @@ function startAutoBackup() {
       
       if (!isAutoBackupEnabled) return;
 
-      const intervalSetting = await db.select().from(settings).where(eq(settings.key, 'autoBackupInterval'));
-      const interval = intervalSetting.length > 0 ? intervalSetting[0].value : 'daily';
+      const intervalValueSetting = await db.select().from(settings).where(eq(settings.key, 'autoBackupIntervalValue'));
+      const intervalValue = intervalValueSetting.length > 0 ? parseInt(intervalValueSetting[0].value) || 1 : 1;
+
+      const intervalUnitSetting = await db.select().from(settings).where(eq(settings.key, 'autoBackupIntervalUnit'));
+      const intervalUnit = intervalUnitSetting.length > 0 ? intervalUnitSetting[0].value : 'days';
+
+      let intervalHours = 24;
+      if (intervalUnit === 'hours') intervalHours = intervalValue;
+      else if (intervalUnit === 'days') intervalHours = intervalValue * 24;
+      else if (intervalUnit === 'weeks') intervalHours = intervalValue * 168;
 
       const lastBackupSetting = await db.select().from(settings).where(eq(settings.key, 'lastAutoBackup'));
       const lastBackupTime = lastBackupSetting.length > 0 ? new Date(lastBackupSetting[0].value).getTime() : 0;
@@ -1044,11 +1433,9 @@ function startAutoBackup() {
       let shouldBackup = false;
       const hoursSinceLastBackup = (now - lastBackupTime) / (1000 * 60 * 60);
 
-      if (interval === 'hourly' && hoursSinceLastBackup >= 1) shouldBackup = true;
-      else if (interval === 'daily' && hoursSinceLastBackup >= 24) shouldBackup = true;
-      else if (interval === 'weekly' && hoursSinceLastBackup >= 168) shouldBackup = true;
-      else if (interval === 'monthly' && hoursSinceLastBackup >= 720) shouldBackup = true;
-      else if (lastBackupTime === 0) shouldBackup = true; // First time backup
+      if (hoursSinceLastBackup >= intervalHours || lastBackupTime === 0) {
+        shouldBackup = true;
+      }
 
       if (shouldBackup) {
         const { getDbPath } = await import('./drizzle/db.js');

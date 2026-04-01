@@ -1,15 +1,35 @@
 import axios from 'axios';
 import { db } from '../db/db';
 
-let API_BASE = '/api';
+export let API_BASE = '/api';
+
+const formatUrl = (url: string) => {
+  let formattedUrl = url;
+  if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
+    formattedUrl = `http://${formattedUrl}`;
+  }
+  return formattedUrl.endsWith('/') ? `${formattedUrl}api` : `${formattedUrl}/api`;
+};
 
 // Initialize API_BASE from settings
 const initApiBase = async () => {
   try {
-    const serverUrlSetting = await db.settings.where('key').equals('serverUrl').first();
-    if (serverUrlSetting && serverUrlSetting.value) {
-      const url = serverUrlSetting.value;
-      API_BASE = url.endsWith('/') ? `${url}api` : `${url}/api`;
+    // Force server mode if running in AI Studio preview
+    if (typeof window !== 'undefined' && window.location.hostname.includes('run.app')) {
+      API_BASE = '/api';
+      return;
+    }
+
+    const deviceRoleSetting = await db.settings.where('key').equals('deviceRole').first();
+    const deviceRole = deviceRoleSetting ? deviceRoleSetting.value : 'server';
+
+    if (deviceRole === 'server') {
+      API_BASE = '/api';
+    } else {
+      const serverUrlSetting = await db.settings.where('key').equals('serverUrl').first();
+      if (serverUrlSetting && serverUrlSetting.value) {
+        API_BASE = formatUrl(serverUrlSetting.value);
+      }
     }
   } catch (e) {
     console.error('Failed to init API_BASE:', e);
@@ -18,30 +38,46 @@ const initApiBase = async () => {
 
 initApiBase();
 
-export const updateApiBase = (url: string) => {
-  API_BASE = url.endsWith('/') ? `${url}api` : `${url}/api`;
+export const updateApiBase = async (url: string) => {
+  try {
+    if (typeof window !== 'undefined' && window.location.hostname.includes('run.app')) {
+      API_BASE = '/api';
+      return;
+    }
+
+    const deviceRoleSetting = await db.settings.where('key').equals('deviceRole').first();
+    const deviceRole = deviceRoleSetting ? deviceRoleSetting.value : 'server';
+    
+    if (deviceRole === 'server') {
+      API_BASE = '/api';
+    } else {
+      API_BASE = formatUrl(url);
+    }
+  } catch (e) {
+    API_BASE = formatUrl(url);
+  }
 };
 
 const requestWithRetry = async (fn: () => Promise<any>, retries = 3, delay = 1000): Promise<any> => {
   try {
-    const isOnlineModeSetting = await db.settings.where('key').equals('isOnlineMode').first();
-    const isOnlineMode = isOnlineModeSetting ? isOnlineModeSetting.value === 'true' : true;
-    
-    if (!isOnlineMode) {
-      throw new Error('Offline mode enabled');
-    }
     return await fn();
   } catch (error: any) {
-    if (error.message === 'Offline mode enabled') {
-      throw error;
-    }
+    console.error(`API Request failed. Retries left: ${retries}. Error:`, error.message, error.response?.data);
     if (retries === 0) throw error;
+    // Don't retry on 409 (Conflict) as it's a permanent error for sync
+    if (error.response && error.response.status === 409) throw error;
     await new Promise(resolve => setTimeout(resolve, delay));
     return requestWithRetry(fn, retries - 1, delay * 2);
   }
 };
 
+// Add default timeout to axios
+axios.defaults.timeout = 10000; // 10 seconds timeout
+
 export const apiService = {
+  get API_BASE() {
+    return API_BASE;
+  },
   async getProducts() {
     return requestWithRetry(() => axios.get(`${API_BASE}/products`).then(r => r.data));
   },
@@ -306,7 +342,21 @@ export const apiService = {
   },
 
   async getBackup() {
-    window.open(`${API_BASE}/backup`, '_blank');
+    try {
+      const response = await fetch(`${API_BASE}/backup`);
+      if (!response.ok) throw new Error('Network response was not ok');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `backup-${new Date().toISOString().split('T')[0]}.db`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Download failed:', error);
+    }
   },
 
   async clearData() {

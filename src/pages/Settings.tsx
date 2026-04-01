@@ -66,6 +66,8 @@ const Settings: React.FC = () => {
     showLogoOnReceipt: true,
     showCustomerInfo: true,
     autoBackup: true,
+    autoBackupIntervalValue: 1,
+    autoBackupIntervalUnit: 'days',
     enableDirectPrint: false,
     printerType: 'usb',
     scannerType: 'usb',
@@ -128,7 +130,7 @@ const Settings: React.FC = () => {
       applyTheme(settings);
       
       // Update API Base URL
-      updateApiBase(settings.serverUrl);
+      await updateApiBase(settings.serverUrl);
     } catch (error) {
       toast.error('خطأ في حفظ الإعدادات');
     }
@@ -353,6 +355,31 @@ const Settings: React.FC = () => {
     } catch (error) {
       console.error('SQL Import error:', error);
       toast.error('فشل استيراد قاعدة البيانات.');
+    }
+  };
+
+  const handleClearSystemData = async () => {
+    if (window.confirm('هل أنت متأكد من مسح جميع بيانات النظام (بما في ذلك الإعدادات)؟ لا يمكن التراجع عن هذا الإجراء!')) {
+      try {
+        await db.transaction('rw', db.tables, async () => {
+          for (const table of db.tables) {
+            await table.clear();
+          }
+        });
+        
+        // Clear remote SQLite
+        try {
+          await apiService.clearData();
+        } catch (e) {
+          console.warn('Failed to clear remote data, but local data is cleared:', e);
+        }
+
+        toast.success('تم مسح جميع بيانات النظام بنجاح');
+        setTimeout(() => window.location.reload(), 1500);
+      } catch (error) {
+        console.error('Clear system data error:', error);
+        toast.error('فشل مسح بيانات النظام');
+      }
     }
   };
 
@@ -1158,13 +1185,22 @@ const Settings: React.FC = () => {
                       <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-4">
                         <h3 className="font-bold text-rose-600">منطقة الخطر: مسح البيانات</h3>
                         <p className="text-sm text-gray-500">هذا الإجراء سيقوم بحذف جميع البيانات نهائياً. لا يمكن التراجع عن هذا الإجراء!</p>
-                        <button 
-                          onClick={handleClearData}
-                          className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-rose-600 text-white rounded-xl font-bold hover:bg-rose-700 transition-colors"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                          مسح جميع البيانات
-                        </button>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={handleClearData}
+                            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-rose-600 text-white rounded-xl font-bold hover:bg-rose-700 transition-colors"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                            مسح البيانات (باستثناء الإعدادات)
+                          </button>
+                          <button 
+                            onClick={handleClearSystemData}
+                            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-red-900 text-white rounded-xl font-bold hover:bg-red-950 transition-colors"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                            مسح جميع البيانات (شامل الإعدادات)
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -1193,16 +1229,24 @@ const Settings: React.FC = () => {
                       {settings.autoBackup && (
                         <div className="space-y-2">
                           <label className="text-sm font-bold text-gray-500">تكرار النسخ الاحتياطي</label>
-                          <select
-                            value={settings.autoBackupInterval || 'daily'}
-                            onChange={(e) => setSettings({ ...settings, autoBackupInterval: e.target.value as any })}
-                            className="w-full px-6 py-4 bg-white border border-gray-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all"
-                          >
-                            <option value="hourly">كل ساعة</option>
-                            <option value="daily">يومياً</option>
-                            <option value="weekly">أسبوعياً</option>
-                            <option value="monthly">شهرياً</option>
-                          </select>
+                          <div className="flex gap-4">
+                            <input
+                              type="number"
+                              min="1"
+                              value={settings.autoBackupIntervalValue || 1}
+                              onChange={(e) => setSettings({ ...settings, autoBackupIntervalValue: parseInt(e.target.value) || 1 })}
+                              className="w-1/3 px-6 py-4 bg-white border border-gray-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all"
+                            />
+                            <select
+                              value={settings.autoBackupIntervalUnit || 'days'}
+                              onChange={(e) => setSettings({ ...settings, autoBackupIntervalUnit: e.target.value as any })}
+                              className="w-2/3 px-6 py-4 bg-white border border-gray-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all"
+                            >
+                              <option value="hours">ساعات</option>
+                              <option value="days">أيام</option>
+                              <option value="weeks">أسابيع</option>
+                            </select>
+                          </div>
                           <p className="text-xs text-gray-500 mt-2">
                             سيتم حفظ النسخ الاحتياطية تلقائياً في مجلد `backups` بجوار قاعدة البيانات.
                           </p>

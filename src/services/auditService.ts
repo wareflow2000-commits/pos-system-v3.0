@@ -12,6 +12,10 @@ export const logAction = async (
 ) => {
   try {
     console.log('Logging action:', { userName, operationName, type, details, quantity, value, productName, branchId });
+    if (!db.auditLogs) {
+      console.error('auditLogs table is undefined in db instance');
+      return;
+    }
     await db.auditLogs.add({
       date: new Date().toISOString(),
       userName,

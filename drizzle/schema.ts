@@ -63,6 +63,8 @@ export const orders = sqliteTable('Order', {
   customerId: integer('customerId'),
   customerName: text('customerName'),
   branchId: integer('branchId'),
+  tableNumber: text('tableNumber'),
+  orderType: text('orderType'),
   status: text('status').notNull(),
   createdBy: text('createdBy'),
   isSynced: integer('isSynced').default(0),

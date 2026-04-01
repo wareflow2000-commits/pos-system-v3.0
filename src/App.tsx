@@ -72,31 +72,36 @@ function AppContent() {
   ]);
 
   useEffect(() => {
-    if (deviceRole === 'client') {
-      const initSocket = async () => {
+    // Both client and server UI need to listen for real-time updates
+    const initSocket = async () => {
+      let serverUrl = window.location.origin;
+      
+      if (deviceRole === 'client') {
         const urlSetting = await db.settings.where('key').equals('serverUrl').first();
-        const serverUrl = urlSetting ? urlSetting.value : window.location.origin;
-        
-        const newSocket = io(serverUrl);
-        
-        newSocket.on('connect', () => {
-          console.log('Connected to server');
-        });
-        
-        newSocket.on('data-updated', (data) => {
-          console.log('Data updated:', data);
-          syncService.pullAll();
-        });
-        
-        setSocket(newSocket);
-      };
+        if (urlSetting && urlSetting.value) {
+          serverUrl = urlSetting.value;
+        }
+      }
       
-      initSocket();
+      const newSocket = io(serverUrl);
       
-      return () => {
-        if (socket) socket.disconnect();
-      };
-    }
+      newSocket.on('connect', () => {
+        console.log(`Connected to server via socket.io (${deviceRole})`);
+      });
+      
+      newSocket.on('data-updated', (data) => {
+        console.log('Data updated from another client/server:', data);
+        syncService.pullAll();
+      });
+      
+      setSocket(newSocket);
+    };
+    
+    initSocket();
+    
+    return () => {
+      if (socket) socket.disconnect();
+    };
   }, [deviceRole]);
 
   useEffect(() => {

@@ -6,10 +6,10 @@ import path from 'path';
 const rootDir = process.cwd();
 
 export default defineConfig({
-  schema: path.join(rootDir, 'drizzle', 'schema.ts'),
-  out: path.join(rootDir, 'drizzle', 'migrations'),
+  schema: './drizzle/schema.ts',
+  out: './drizzle/migrations',
   dialect: 'sqlite',
   dbCredentials: {
-    url: path.join(rootDir, 'dev.db'),
+    url: './dev.db',
   },
 });

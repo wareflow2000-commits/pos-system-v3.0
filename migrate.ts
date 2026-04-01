@@ -7,6 +7,11 @@ import fs from 'fs';
 
 // Determine the best path for the database
 const getDbPath = () => {
+  // In AI Studio or Linux, always use the project root for simplicity
+  if (process.platform !== 'win32') {
+    return path.join(process.cwd(), 'dev.db');
+  }
+
   if (process.env.NODE_ENV === 'production') {
     const appDataDir = path.join(os.homedir(), 'AppData', 'Roaming', 'SmartPOS');
     if (!fs.existsSync(appDataDir)) {
@@ -43,6 +48,9 @@ export async function runMigrations() {
     return;
   }
 
+  console.log('Starting migrate()...');
   migrate(db, { migrationsFolder });
+  console.log('migrate() finished.');
+  sqlite.close();
   console.log('Migrations applied successfully.');
 }

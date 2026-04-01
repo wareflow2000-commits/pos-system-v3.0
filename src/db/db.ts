@@ -509,10 +509,78 @@ export class POSDatabase extends Dexie {
       stocktakingEntries: '++id, sessionId, productId, barcode, syncStatus',
       inventoryBatches: '++id, productId, syncStatus'
     });
+
+    this.version(18).stores({
+      products: '++id, barcode, categoryId, name, branchId, syncStatus',
+      categories: '++id, name, branchId, syncStatus',
+      orders: 'id, receiptNumber, createdAt, status, branchId, syncStatus, customerId, createdBy',
+      orderItems: '++id, orderId, productId, syncStatus',
+      shifts: 'id, status, startTime, branchId, syncStatus',
+      customers: '++id, name, phone, branchId, syncStatus',
+      expenses: '++id, date, category, branchId, syncStatus',
+      suppliers: '++id, name, phone, syncStatus',
+      employees: '++id, name, role, status, branchId, syncStatus, pinCode, username',
+      settings: '++id, key, syncStatus',
+      purchases: 'id, supplierId, date, branchId, syncStatus',
+      purchaseItems: '++id, purchaseId, productId, syncStatus',
+      attendance: '++id, employeeId, date, branchId, syncStatus',
+      loyaltyTransactions: '++id, customerId, orderId, date, syncStatus',
+      branches: '++id, name, status, syncStatus',
+      payroll: '++id, employeeId, periodStart, status, syncStatus',
+      offers: '++id, name, type, status, branchId, syncStatus',
+      auditLogs: '++id, date, type, userName, syncStatus',
+      journalEntries: '++id, date, referenceId, referenceType, syncStatus',
+      transactions: '++id, orderId, purchaseId, journalEntryId, syncStatus',
+      stocktakingSessions: 'id, status, createdAt, branchId, syncStatus',
+      stocktakingEntries: '++id, sessionId, productId, barcode, syncStatus',
+      inventoryBatches: '++id, productId, syncStatus'
+    });
+
+    this.version(19).stores({
+      products: '++id, barcode, categoryId, name, branchId, syncStatus',
+      categories: '++id, name, branchId, syncStatus',
+      orders: 'id, receiptNumber, createdAt, status, branchId, syncStatus, customerId, createdBy',
+      orderItems: '++id, orderId, productId, syncStatus',
+      shifts: 'id, status, startTime, branchId, syncStatus',
+      customers: '++id, name, phone, branchId, syncStatus',
+      expenses: '++id, date, category, branchId, syncStatus',
+      suppliers: '++id, name, phone, syncStatus',
+      employees: '++id, name, role, status, branchId, syncStatus, pinCode, username',
+      settings: '++id, key, syncStatus',
+      purchases: 'id, supplierId, date, branchId, syncStatus',
+      purchaseItems: '++id, purchaseId, productId, syncStatus',
+      attendance: '++id, employeeId, date, branchId, syncStatus',
+      loyaltyTransactions: '++id, customerId, orderId, date, syncStatus',
+      branches: '++id, name, status, syncStatus',
+      payroll: '++id, employeeId, periodStart, status, syncStatus',
+      offers: '++id, name, type, status, branchId, syncStatus',
+      auditLogs: '++id, date, type, userName, syncStatus',
+      journalEntries: '++id, date, referenceId, referenceType, syncStatus',
+      transactions: '++id, orderId, purchaseId, journalEntryId, syncStatus',
+      stocktakingSessions: 'id, status, createdAt, branchId, syncStatus',
+      stocktakingEntries: '++id, sessionId, productId, barcode, syncStatus',
+      inventoryBatches: '++id, productId, syncStatus'
+    });
   }
 }
 
 export const db = new POSDatabase();
+
+// Add hooks to generate large IDs for offline creation
+db.tables.forEach(table => {
+  if (table.schema.primKey.auto) {
+    table.hook('creating', function (primKey, obj, transaction) {
+      if (typeof primKey === 'undefined') {
+        // Generate a large ID based on timestamp to avoid collisions
+        // Use a combination of timestamp and random number to ensure uniqueness
+        const timestamp = Date.now();
+        const random = Math.floor(Math.random() * 1000);
+        // Ensure it's > 1000000 and fits in integer
+        return timestamp * 1000 + random;
+      }
+    });
+  }
+});
 
 // --- Seed Initial Data ---
 export async function seedDatabase() {
